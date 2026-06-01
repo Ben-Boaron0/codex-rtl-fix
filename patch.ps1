@@ -62,7 +62,7 @@ if ((-not $SkipMain) -and (-not $IsAdmin)) {
         [Net.ServicePointManager]::SecurityProtocol =
             [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     } catch { }
-    $InstallUrl = "https://raw.githubusercontent.com/shraga100/claude-desktop-rtl-patch/main/install.ps1"
+    $InstallUrl = "https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main/install.ps1"
     if ($Auto) { $env:CLAUDE_RTL_AUTO = '1' }
     Invoke-Expression (Invoke-RestMethod $InstallUrl)
     Exit

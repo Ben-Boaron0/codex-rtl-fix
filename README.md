@@ -13,8 +13,7 @@ RTL/LTR text rendering.
 - Claude Desktop patching is imported from the original Claude Desktop RTL Patch.
 - Codex Desktop read-only inspection is available as the next discovery step.
 - ChatGPT Desktop support is planned after Codex discovery.
-- The verified `irm | iex` installer flow needs a new AI RTL Fix signing key
-  before public releases.
+- The verified `irm | iex` installer flow uses an AI RTL Fix signing key.
 
 ## What It Does Today
 
@@ -34,31 +33,55 @@ Open Windows PowerShell as Administrator from this repository and run:
 powershell -ExecutionPolicy Bypass -File .\patch.ps1
 ```
 
-Do not use the old upstream `irm | iex` command for this repository. The
-imported signature files still belong to the original Claude patch project and
-will be replaced once AI RTL Fix has its own release signing flow.
+The verified installer downloads `patch.ps1` and `patch.ps1.sig` from this
+repository and checks them against the AI RTL Fix public key before elevation:
+
+```powershell
+irm https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main/install.ps1 | iex
+```
 
 ## Menu
 
-The current menu is still Claude-focused while the project is being reshaped.
-Codex inspection is read-only and does not patch or launch Codex.
+The menu is app-first: select target apps, then choose an action available for
+that selection. Codex inspection is read-only and does not patch or launch
+Codex.
 
 ```text
 AI RTL Fix
 
-Detected apps:
-  Claude Desktop: Found
-  Codex Desktop: Found
-  ChatGPT Desktop: Not found
+Select target apps:
+  1. [ ] Claude Desktop: Found
+  2. [ ] Codex Desktop: Found
+  3. [ ] ChatGPT Desktop: Not found (planned)
+
+Toggle app number, A for all supported, C to continue, Q to exit
+
+Selected apps:
+  - Codex Desktop
 
 Select action:
-  1. Patch Claude Desktop RTL
-  2. Restore Claude Desktop
-  3. Create Claude quick update shortcut
-  4. Enable Claude auto re-patch
-  5. Disable Claude auto re-patch
-  6. Inspect Codex Desktop
-  7. Exit
+  1. Inspect selected apps
+  B. Back to app selection
+  Q. Exit
+```
+
+## Verification
+
+The public-key fingerprint for the verified installer is:
+
+```text
+dc:6e:f8:65:eb:3c:00:46:76:98:3b:35:9c:77:1e:ba:31:70:4b:5f:fc:c2:b2:3e:5f:4a:d3:46:44:84:7b:1f
+```
+
+Maintainer commands:
+
+```powershell
+# One-time key creation, then back up C:\Users\Ben\.ai-rtl-fix-signing.key.
+powershell -ExecutionPolicy Bypass -File .\tools\new-signing-key.ps1
+
+# Per release after patch.ps1 changes.
+powershell -ExecutionPolicy Bypass -File .\tools\sign-release.ps1
+powershell -ExecutionPolicy Bypass -File .\tools\verify-signature.ps1
 ```
 
 ## How The Claude Patch Works

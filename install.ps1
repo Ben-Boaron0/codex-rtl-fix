@@ -1,4 +1,4 @@
-# Claude RTL Patch -- verified installer.
+# AI RTL Fix -- verified installer.
 #
 # Downloads patch.ps1 and patch.ps1.sig from GitHub, verifies the signature
 # against an RSA-4096 public key hardcoded below (private key lives offline on
@@ -8,13 +8,13 @@
 # users -- the attacker would also need the maintainer's offline private key.
 #
 # Public-key fingerprint (SHA-256 over the embedded JSON blob below):
-#   6e:f4:c2:a6:c2:42:34:a1:5f:e5:cd:e5:5d:a5:b0:3c:94:64:b4:56:7f:81:04:7c:83:9a:50:1c:7c:6f:07:c9
+#   dc:6e:f8:65:eb:3c:00:46:76:98:3b:35:9c:77:1e:ba:31:70:4b:5f:fc:c2:b2:3e:5f:4a:d3:46:44:84:7b:1f
 # Cross-check this at the project README and any out-of-band channel (e.g.
 # release notes, social) before trusting a fresh install.
-$ExpectedPubKey = 'eyJNb2R1bHVzIjoibkhzT3FXUUxVdjV3amVYc2RDVmYwQzNkTzdJd2U1S2lKTWJJS0poZkx3TGZWcE0vYzVMamZNc0lmbDVtZjk2UkVvaEdKdVZneVM2dGVGcXJINnpQNUE0Q3dLQ2s2Mk42Sy9lOXBNbGZSTDZpa281QmExOFRvckdQcjRpRVB4eGQ5NGVxL3dhUzNVRFBiNlZKaHU0MUFrdFQ2Z0pSTEdEenhRa011Rk1NSFc1SmgvMW5Bd3liNmk4bFdJZmZKS2lNUTgzZWI3OHBPVEIvdFpqUWU5RWZZdXg5aTJNK0psV1NuN3lheVRUNCtHM2xMNlJPRFI0V2pkZi91aE5jQ1NMN0NZdjFjVmViVW51WEtMc0dwaWdBOFVxc2piWkdIcEdXOEtVUXFhWGdDVFQ4NmIyZXl4aXVJc0theXE4NVQ4VkNrTGhtRnhqeE5PSGdFVmZPMmVFck9OV252OXZPMVNtb1YrK1VZUUNPTDVnbkE4cHFmVG1nTkIyU0pFOVIrOGtlWldIcVY1OCthOFBUWFlCZ1RHMlJMY2ZZVGZnUW0vTXVQdkg3UnlmVjlJMFJVeTJaaDZKTEsxT2xIT1kwc2Y2NW0wL0kwMXQzRjVmbmdnUTM0allJSWtzTThDRCtHZ2VnUWtmL2JVWHk0T2ZKYWdFK05UcndQNmJVVU9mT3N2dlVYY0ZDU3o0Y01qUWRzeTNnOE0wOWNWQmYzTzR1YzIrMEJ3TGZ3dXJjeFk1cWJJaHdmRmZWbkdSckt1UlBYdEZrd01pUEo4c3c4cGo0MU9WcEdKQVoxV2dpZnUvR2JqU1ovTXdMTk1PaThXbzBVZUg4ZFE2UFk2aUJiY1dqbUx1WHhCbjQ2R3Qwa0R1dEtCNEJCT0MrTHg2ajQ0M3ZWc2NTeFBrNVBvL0NKRlU9IiwiRXhwb25lbnQiOiJBUUFCIn0='
+$ExpectedPubKey = 'eyJNb2R1bHVzIjoiMmI1bHhCYVl5T3Z6ZGdDaHFMTEhGbkFCbGIreXhvRFo3ODRJa0FjQjNOSDFLb2IzQW9JM2xUeS9RaHNHd1lrMDJodnZrejFVb1B0Q3RMalZwZ2EraXRiR3lJMDRZUXRZbDQ2ZXJtbjV1NWhBNk9leUsySi9CRkVjUTkzamlpOVdFYlVQWTM4VCtDcGE3Mk96eFk2OVJ4bjNreksxS01ULzhXOHQ0RFJNWFZpMmxreEw2TXRuUHRKRkJDaW42R0p0RWc2QWt2OERMTmM1VVVtLzdOL0t3S0hTbS85V0MvcmE4ditwbG9RbENQdEEwNUNpMjVpWFk3aE9uSGsyVWk5YTNKbjFDNUZPajhPdFJlV1lUenExbVRVMUpZdXlRYjA5ZGtyNXJSMWovK1htVkdySzMyQ2p6Qm5wY3dPUUtmZFdwbjNzUGttMDBWbDVLeVYwZXFTaHpoL0Z2bjhCa2hWTEczb3NHMkwvbHNGN3AybkxYTTJVOC9KVkRpYXVLdStEb1czWmxoSUpmOGsydTYrTkxtMFdXUzZQdkhLZldXMElNY0JLMVl4L09rQTVZUTI5dW83eTU0WENjUnZBSGMwa01SZHkwbEdsdkIwMWs2T2ZKeitiaEdkUWt5NVZadDdzYVRqUEJkcVBBVjducnBRYU9UdU9hL29XUGZlRWJ3aXJIcDU5UUl6eFJkenVOUkk4Q2R6enMxVXB2TTc5cm4zZHZraHVCNG1WY2RBMi9IUlJXVHJySWM0d0hrZ1lteCtUTngrTjFNNFloZEdHQkJ3bFlySUFWWTQ5MU1GcG9KUnFJNSszNndkNHJySDB3eGdNR2p4cmZIcjBWOHg0ZjZzUFNWSWdiaFp5MG41Ni9NNjl1Sk9FdDBmMmhxN3htMVN4T004TXZOV2ptM0U9IiwiRXhwb25lbnQiOiJBUUFCIn0='
 
-$RepoBase = 'https://raw.githubusercontent.com/shraga100/claude-desktop-rtl-patch/main'
-$TmpFile  = Join-Path $env:TEMP 'claude_rtl_patch.ps1'
+$RepoBase = 'https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main'
+$TmpFile  = Join-Path $env:TEMP 'ai_rtl_fix_patch.ps1'
 
 # PS 5.1 defaults to TLS 1.0; GitHub requires 1.2+.
 try {
@@ -80,7 +80,7 @@ if (-not $valid) {
     Write-Host "  * A maintainer pushed patch.ps1 without re-signing." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Cross-check the public-key fingerprint at:" -ForegroundColor Cyan
-    Write-Host "  https://github.com/shraga100/claude-desktop-rtl-patch#verification" -ForegroundColor Cyan
+    Write-Host "  https://github.com/Ben-Boaron0/ai-rtl-fix#verification" -ForegroundColor Cyan
     return
 }
 
@@ -101,6 +101,5 @@ Write-Host "Patch verified ($($patchBytes.Length) bytes). Elevating..." -Foregro
 # re-download install.ps1 itself) also avoids a TOCTOU window where the repo
 # could change between our verify and patch.ps1's pin.
 
-# Same launch line as the original installer -- nothing user-facing has changed.
 # -NoExit keeps the elevated window open so the user can read the patch log.
 Start-Process -FilePath PowerShell.exe -Verb RunAs -ArgumentList "-NoProfile -NoExit -ExecutionPolicy Bypass -File `"$TmpFile`" -TrustedPubKey `"$ExpectedPubKey`""

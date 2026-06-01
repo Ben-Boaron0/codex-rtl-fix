@@ -133,7 +133,7 @@ function Save-UpdateScript {
 
         # Single-quoted here-string: $ signs are preserved literally for runtime evaluation.
         $updateBody = @'
-# Claude RTL Patch -- verified local updater.
+# AI RTL Fix -- verified local updater.
 #
 # Loaded by the desktop "Update Claude RTL" shortcut. Uses the pubkey pinned
 # at install time to verify patch.ps1 against the maintainer's offline private
@@ -147,7 +147,7 @@ try {
 
 $stateDir      = Join-Path $env:ProgramData "ClaudeRtlPatch"
 $pubkeyPinFile = Join-Path $stateDir "trusted-pubkey.b64"
-$repoBase      = "https://raw.githubusercontent.com/shraga100/claude-desktop-rtl-patch/main"
+$repoBase      = "https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main"
 $patchUrl      = "$repoBase/patch.ps1"
 $sigUrl        = "$repoBase/patch.ps1.sig"
 
@@ -160,7 +160,7 @@ function Pause-ThenExit($code) {
 
 Write-Host ""
 Write-Host "=======================================================" -ForegroundColor Cyan
-Write-Host "  Claude RTL Patch -- verified update                  " -ForegroundColor Cyan
+Write-Host "  AI RTL Fix -- verified update                        " -ForegroundColor Cyan
 Write-Host "=======================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -168,7 +168,7 @@ if (-not (Test-Path $pubkeyPinFile)) {
     Write-Host "No pinned pubkey at $pubkeyPinFile." -ForegroundColor Red
     Write-Host "This computer has not bootstrapped a trust anchor yet." -ForegroundColor Yellow
     Write-Host "Run the manual installer once to fix this:" -ForegroundColor Yellow
-    Write-Host "  irm https://raw.githubusercontent.com/shraga100/claude-desktop-rtl-patch/main/install.ps1 | iex" -ForegroundColor Cyan
+    Write-Host "  irm https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main/install.ps1 | iex" -ForegroundColor Cyan
     Pause-ThenExit 1
 }
 
@@ -224,7 +224,7 @@ if (-not $valid) {
 
 # Strip incoming BOM (we re-add UTF-8 BOM on write). PS 5.1 needs BOM to parse
 # Hebrew/box-drawing characters in patch.ps1.
-$tmpFile = Join-Path $env:TEMP "claude_rtl_patch.ps1"
+$tmpFile = Join-Path $env:TEMP "ai_rtl_fix_patch.ps1"
 $content = [System.Text.Encoding]::UTF8.GetString($patchBytes)
 if ($content.Length -gt 0 -and $content[0] -eq [char]0xFEFF) { $content = $content.Substring(1) }
 [System.IO.File]::WriteAllText($tmpFile, $content, [System.Text.UTF8Encoding]::new($true))

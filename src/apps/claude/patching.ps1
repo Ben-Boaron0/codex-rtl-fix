@@ -446,7 +446,7 @@ $pubkeyPinFile  = Join-Path $stateDir "trusted-pubkey.b64"
 # pubkey (not a fingerprint of install.ps1's $ExpectedPubKey variable) means
 # the only thing we trust from the network is patch.ps1 itself, validated
 # byte-for-byte against the maintainer's offline private key.
-$repoBase       = "https://raw.githubusercontent.com/shraga100/claude-desktop-rtl-patch/main"
+$repoBase       = "https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main"
 $patchUrl       = "$repoBase/patch.ps1"
 $sigUrl         = "$repoBase/patch.ps1.sig"
 
@@ -483,7 +483,7 @@ function Show-Toast($title, $body) {
         $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
         $xml.LoadXml($xmlStr)
         $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
-        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Claude RTL Patch").Show($toast)
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("AI RTL Fix").Show($toast)
     } catch {
         Write-WLog "Toast failed: $($_.Exception.Message)"
     }
@@ -587,7 +587,7 @@ function Invoke-AutoPatch($newVer, $exePath) {
     # Write patch.ps1 to disk with a UTF-8 BOM (PS 5.1 needs the BOM to parse
     # Hebrew/box-drawing characters correctly). Strip any incoming BOM from the
     # bytes first to avoid double-BOM.
-    $tmpFile = Join-Path $env:TEMP 'claude_rtl_patch.ps1'
+    $tmpFile = Join-Path $env:TEMP 'ai_rtl_fix_patch.ps1'
     $content = [System.Text.Encoding]::UTF8.GetString($patchBytes)
     if ($content.Length -gt 0 -and $content[0] -eq [char]0xFEFF) { $content = $content.Substring(1) }
     [System.IO.File]::WriteAllText($tmpFile, $content, [System.Text.UTF8Encoding]::new($true))
@@ -1158,7 +1158,7 @@ function Install-Patch {
             Write-Host "REFUSE to run until this is fixed (safe-by-default)." -ForegroundColor Yellow
             Write-Host ""
             Write-Host "Fix: re-run the installer from a clean PowerShell session:" -ForegroundColor Cyan
-            Write-Host "  irm https://raw.githubusercontent.com/shraga100/claude-desktop-rtl-patch/main/install.ps1 | iex" -ForegroundColor Cyan
+            Write-Host "  irm https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main/install.ps1 | iex" -ForegroundColor Cyan
             Write-Host ""
         }
 
