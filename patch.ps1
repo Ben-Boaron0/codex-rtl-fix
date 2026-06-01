@@ -29,6 +29,16 @@ if ($TrustedPubKey) { $env:CLAUDE_RTL_TRUSTED_PUBKEY = $TrustedPubKey }
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $IsAdmin) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
+    if ($PSCommandPath) {
+        $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+        if ($Auto) { $args += '-Auto' }
+        if ($TrustedPubKey) { $args += @('-TrustedPubKey', $TrustedPubKey) }
+        Start-Process -FilePath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
+            -Verb RunAs `
+            -ArgumentList $args
+        Exit
+    }
+
     # Prefer the locally-installed verified-update helper if it exists. That
     # helper (written admin-only at install time, see Save-UpdateScript) uses
     # the pinned pubkey to verify patch.ps1 before elevation -- hermetic
@@ -932,6 +942,50 @@ function Find-ClaudeDir {
     }
 
     return $null
+}
+
+function Find-CodexDir {
+    $pkg = Get-AppxPackage OpenAI.Codex -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pkg -and $pkg.InstallLocation) { return $pkg.InstallLocation }
+    return $null
+}
+
+function Get-AppDetectionStatus {
+    param(
+        [string]$Name,
+        [string]$InstallLocation,
+        [string]$SupportStatus
+    )
+
+    [pscustomobject]@{
+        Name = $Name
+        InstallLocation = $InstallLocation
+        Found = [bool]$InstallLocation
+        SupportStatus = $SupportStatus
+    }
+}
+
+function Get-DetectedApps {
+    @(
+        Get-AppDetectionStatus -Name 'Claude Desktop' -InstallLocation (Find-ClaudeDir) -SupportStatus 'Supported'
+        Get-AppDetectionStatus -Name 'Codex Desktop' -InstallLocation (Find-CodexDir) -SupportStatus 'Planned'
+        Get-AppDetectionStatus -Name 'ChatGPT Desktop' -InstallLocation $null -SupportStatus 'Planned'
+    )
+}
+
+function Show-DetectedApps {
+    param([object[]]$Apps)
+
+    Write-Host "Detected apps:" -ForegroundColor White
+    foreach ($app in $Apps) {
+        if ($app.Found -and $app.SupportStatus -eq 'Supported') {
+            Write-Host ("  {0}: Found" -f $app.Name) -ForegroundColor Green
+        } elseif ($app.Found) {
+            Write-Host ("  {0}: Found ({1})" -f $app.Name, $app.SupportStatus.ToLowerInvariant()) -ForegroundColor Yellow
+        } else {
+            Write-Host ("  {0}: Not found ({1})" -f $app.Name, $app.SupportStatus.ToLowerInvariant()) -ForegroundColor DarkGray
+        }
+    }
 }
 
 function Stop-ClaudeServices {
@@ -2285,24 +2339,17 @@ function Show-Menu {
     Write-Host "║                   AI RTL Fix                    ║" -ForegroundColor Cyan
     Write-Host "╚══════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "Detected apps:" -ForegroundColor White
-    $ClaudeDir = Find-ClaudeDir
-    if ($ClaudeDir) {
-        Write-Host "  Claude Desktop: Found" -ForegroundColor Green
-    } else {
-        Write-Host "  Claude Desktop: Not found" -ForegroundColor DarkGray
-    }
-    Write-Host "  Codex Desktop: Planned" -ForegroundColor DarkGray
-    Write-Host "  ChatGPT Desktop: Planned" -ForegroundColor DarkGray
+    Show-DetectedApps -Apps (Get-DetectedApps)
     Write-Host "`nSelect an action:"
     Write-Host "  1. Patch Claude Desktop RTL" -ForegroundColor White
     Write-Host "  2. Restore Claude Desktop" -ForegroundColor White
     Write-Host "  3. Create Claude quick update shortcut" -ForegroundColor Green
     Write-Host "  4. Enable Claude auto re-patch" -ForegroundColor Green
     Write-Host "  5. Disable Claude auto re-patch" -ForegroundColor White
-    Write-Host "  6. Exit" -ForegroundColor White
+    Write-Host "  6. Inspect Codex Desktop (coming next)" -ForegroundColor DarkGray
+    Write-Host "  7. Exit" -ForegroundColor White
 
-    $choice = Read-Host "`nEnter your choice (1/2/3/4/5/6)"
+    $choice = Read-Host "`nEnter your choice (1/2/3/4/5/6/7)"
 
     if ($choice -eq '1' -or $choice -eq '2') {
         Write-Host "`nWARNING: This will automatically close Claude Desktop and its background services." -ForegroundColor Yellow
@@ -2343,7 +2390,19 @@ function Show-Menu {
         $null = Read-Host
         Show-Menu
     }
-    elseif ($choice -eq '6') { Exit }
+    elseif ($choice -eq '6') {
+        Write-Host "`nCodex Desktop support is detected but not implemented yet." -ForegroundColor Yellow
+        $codexDir = Find-CodexDir
+        if ($codexDir) {
+            Write-Host "Found Codex at: $codexDir" -ForegroundColor Green
+        } else {
+            Write-Host "Codex Desktop was not found on this system." -ForegroundColor DarkGray
+        }
+        Write-Host "`nPress Enter to return to menu..."
+        $null = Read-Host
+        Show-Menu
+    }
+    elseif ($choice -eq '7') { Exit }
     else { Show-Menu }
 }
 
