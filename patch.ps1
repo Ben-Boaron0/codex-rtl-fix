@@ -1,8 +1,9 @@
 ﻿<#
 .SYNOPSIS
-    Claude Desktop Smart RTL Patcher & Service Fixer
+    AI RTL Fix - Claude Desktop RTL Patcher
 .DESCRIPTION
-    Injects smart RTL support into Claude Desktop without breaking English/Code.
+    Injects smart RTL support into desktop AI apps without breaking English/Code.
+    Current adapter: Claude Desktop.
     Handles ASAR repackaging, executable hash patching, and cowork-svc binary certificate swapping.
     Strictly uses PURE BYTE-ARRAY manipulation matching the original Python script.
 #>
@@ -2281,14 +2282,24 @@ function Restore-Patch {
 function Show-Menu {
     Clear-Host
     Write-Host "╔══════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║    Claude Desktop Smart RTL & Service Patcher    ║" -ForegroundColor Cyan
+    Write-Host "║                   AI RTL Fix                    ║" -ForegroundColor Cyan
     Write-Host "╚══════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Detected apps:" -ForegroundColor White
+    $ClaudeDir = Find-ClaudeDir
+    if ($ClaudeDir) {
+        Write-Host "  Claude Desktop: Found" -ForegroundColor Green
+    } else {
+        Write-Host "  Claude Desktop: Not found" -ForegroundColor DarkGray
+    }
+    Write-Host "  Codex Desktop: Planned" -ForegroundColor DarkGray
+    Write-Host "  ChatGPT Desktop: Planned" -ForegroundColor DarkGray
     Write-Host "`nSelect an action:"
-    Write-Host "  1. Install Smart RTL Patch (Full Hebrew Support)" -ForegroundColor White
-    Write-Host "  2. Restore Original State (Remove Patch)" -ForegroundColor White
-    Write-Host "  3. Create 'Quick Update' Desktop Shortcut" -ForegroundColor Green
-    Write-Host "  4. Enable Auto Re-Patch After Each Claude Update (Background Service)" -ForegroundColor Green
-    Write-Host "  5. Disable Auto Re-Patch Service" -ForegroundColor White
+    Write-Host "  1. Patch Claude Desktop RTL" -ForegroundColor White
+    Write-Host "  2. Restore Claude Desktop" -ForegroundColor White
+    Write-Host "  3. Create Claude quick update shortcut" -ForegroundColor Green
+    Write-Host "  4. Enable Claude auto re-patch" -ForegroundColor Green
+    Write-Host "  5. Disable Claude auto re-patch" -ForegroundColor White
     Write-Host "  6. Exit" -ForegroundColor White
 
     $choice = Read-Host "`nEnter your choice (1/2/3/4/5/6)"

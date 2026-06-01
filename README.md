@@ -1,190 +1,93 @@
-# Claude Desktop RTL Patch
+# AI RTL Fix
 
-Smart RTL (Right-to-Left) support for **Claude Desktop on Windows**. Adds automatic Hebrew/Arabic text direction detection without breaking English or code blocks.
+AI RTL Fix is a Windows RTL patch manager for desktop AI apps.
 
-## What it does
+The current baseline supports **Claude Desktop** using the MIT-licensed work from
+[`shraga100/claude-desktop-rtl-patch`](https://github.com/shraga100/claude-desktop-rtl-patch).
+The goal is to evolve this into one tool for Claude Desktop, Codex Desktop, and
+other AI desktop apps that need better Hebrew, Arabic, Persian, and mixed
+RTL/LTR text rendering.
 
-* **Auto-detects RTL text** in Claude's responses and input box
+## Current Status
 
-* **Keeps code blocks LTR** — no broken formatting
+- Claude Desktop patching is imported from the original Claude Desktop RTL Patch.
+- Codex Desktop support is planned next.
+- ChatGPT Desktop support is planned after Codex discovery.
+- The verified `irm | iex` installer flow needs a new AI RTL Fix signing key
+  before public releases.
 
-* **Creates backups** of all modified files with full restore support
+## What It Does Today
 
-* **Automated Updates** — Optional background service to automatically re-apply the patch when Claude updates
+For Claude Desktop, the patcher:
 
-## Quick Install
+- Detects RTL text in Claude responses and the input box.
+- Keeps code blocks and code-like content LTR.
+- Creates backups of modified files.
+- Can restore the original app state.
+- Can enable an automatic re-patch scheduled task after Claude updates.
 
-Open **PowerShell** and run:
+## Running Locally
 
-`irm https://raw.githubusercontent.com/shraga100/claude-desktop-rtl-patch/main/install.ps1 | iex`
-
-A UAC prompt will appear — click **Yes** to grant admin privileges.
-
-> **Alternative:** Download `patch.ps1` and right-click → **Run with PowerShell**
-
-## Requirements
-
-* **Windows 10/11** with Claude Desktop installed
-
-  Download Claude Desktop from [claude.ai](https://downloads.claude.ai/releases/win32/ClaudeSetup.exe)
-
-* **Node.js** installed (`npx` must be available in PATH)
-
-* **Administrator privileges** (the script will request elevation automatically)
-
-> ⚠️ **Windows Only:** This specific patch is for Windows.
->
-> 🍎 **Mac Users:** Try [toboly's mac patch](https://github.com/toboly/claude-desktop-rtl-patch-mac) or [soguy's mac patch](https://github.com/soguy/claude-desktop-rtl-mac). *(Note: I have not personally tested these Mac versions, use at your own risk).*
-
-## Menu Options
-
-When you run the script, you will see the following interactive menu:
-
-| Option | Description | 
- | ----- | ----- | 
-| **1. Install** | Backs up originals and injects RTL support | 
-| **2. Restore** | Reverts all changes from backup files | 
-| **3. Create Shortcut** | Creates a desktop shortcut for quick 1-click updates | 
-| **4. Enable Auto Re-Patch** | Installs a watcher to re-patch Claude automatically after updates | 
-| **5. Disable Auto Re-Patch** | Removes the background watcher | 
-| **6. Exit** | Close the patcher | 
-
-## 🔄 Keeping the Patch Updated (Automation)
-
-Claude Desktop updates frequently, and each update will overwrite this patch. To make maintaining the RTL support effortless, the patcher includes two helpful features:
-
-1. **Desktop Shortcut (Option 3):** This creates a shortcut on your Desktop named "Update Claude RTL". Double-clicking this will silently fetch and apply the latest patch without making you navigate the menu.
-
-2. **Auto-Updater Service (Option 4):** This sets up a lightweight Windows Scheduled Task. It runs quietly in the background and detects exactly when a new `claude.exe` version is launched. Once it detects an update, it will automatically download and apply the patch, showing you a quick Windows notification when it's done.
-
-## How it works (Technical)
-
-Claude Desktop is an Electron application distributed as a **digitally signed** package. Adding RTL support requires modifying the JavaScript inside the app — but this breaks the integrity checks Anthropic uses to verify the application. The patch handles this in three phases:
-
-### Phase 1 — ASAR Injection
-
-Claude's UI code lives inside `app.asar`, a read-only archive format used by Electron. The script:
-
-1. Extracts the ASAR archive using `npx asar`
-
-2. Injects a small JavaScript snippet into the renderer files — this snippet detects RTL characters in real time and applies the correct text direction
-
-3. Repacks the ASAR and computes the new SHA-256 hash of its header
-
-### Phase 2 — Hash Replacement in `claude.exe`
-
-`claude.exe` contains the original ASAR hash hardcoded as an ASCII string. The script performs a **direct byte-level search-and-replace** inside the binary to update it to the new hash, so the app accepts the modified ASAR.
-
-### Phase 3 — Certificate Swap in `cowork-svc.exe`
-
-`cowork-svc.exe` is a background service that verifies the authenticity of `claude.exe` using Anthropic's embedded certificate. After re-signing `claude.exe` with a new self-signed certificate, the script:
-
-1. Locates the original Anthropic X.509 certificate inside `cowork-svc.exe` using binary pattern matching (searching for `0x30 0x82` near the string `"Anthropic, PBC"`)
-
-2. Generates a self-signed certificate small enough to fit in the same byte slot
-
-3. Replaces the original certificate in-place, padding with `0x00` to preserve file size and binary offsets
-
-4. Re-signs both `claude.exe` and `cowork-svc.exe` with the new certificate
-
-5. Adds the certificate to the Windows trusted root store (`LocalMachine\Root`)
-
-All original files are backed up before any changes. If anything fails, an automatic rollback restores the originals.
-
-## ⚠️ Disclaimer
-
-> **Please read before installing.**
-
-This patch modifies the internal binaries of Claude Desktop in ways that are **not authorized by Anthropic**. Specifically:
-
-* It replaces Anthropic's code-signing certificate inside `cowork-svc.exe` with a self-signed certificate
-
-* It adds that self-signed certificate to your Windows **trusted root certificate store**
-
-* It bypasses the application's integrity verification mechanism
-
-**By installing this patch you accept the following:**
-
-1. **Use at your own risk.** The authors take no responsibility for any damage to your system, data loss, or application instability.
-
-2. **Anthropic may terminate your account** if they detect unauthorized modifications to their software, per their Terms of Service.
-
-3. **Keep the repository trusted.** If this repository were ever compromised, running the install command could execute malicious code with Administrator privileges. Always verify the source before running any `irm | iex` command.
-
-4. **This patch is temporary.** Claude Desktop updates will overwrite the patched files. You may need to re-run the installer after each update (or use the built-in Auto-Updater).
-
-5. **Not a permanent solution.** This exists only until Anthropic adds native RTL support. Please upvote and request this feature through official Anthropic channels.
-
-This project is open source (MIT). Contributions to improve RTL accuracy are welcome — PRs are open. 🙏
-
-## Verification
-
-`install.ps1` verifies an RSA-4096 signature over `patch.ps1` before running it. A compromised GitHub repository alone is **not enough** to ship malicious code to users — the attacker would also need the maintainer's offline private key.
-
-**Public-key fingerprint (SHA-256):**
-
-```
-6e:f4:c2:a6:c2:42:34:a1:5f:e5:cd:e5:5d:a5:b0:3c:94:64:b4:56:7f:81:04:7c:83:9a:50:1c:7c:6f:07:c9
-```
-
-If you're paranoid (and that's a healthy state when running `irm | iex` as Administrator), you can recompute the fingerprint of the public key embedded in `install.ps1` and check it matches the value above:
+Open Windows PowerShell as Administrator from this repository and run:
 
 ```powershell
-$content = Invoke-RestMethod "https://raw.githubusercontent.com/shraga100/claude-desktop-rtl-patch/main/install.ps1"
-if ($content -match "ExpectedPubKey\s*=\s*'([A-Za-z0-9+/=]+)'") {
-    $bytes = [Convert]::FromBase64String($matches[1])
-    $hash  = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
-    ([BitConverter]::ToString($hash)).Replace('-', ':').ToLower()
-}
+powershell -ExecutionPolicy Bypass -File .\patch.ps1
 ```
 
-A mismatch means the embedded key was swapped — do **not** proceed; report it as a security issue.
+Do not use the old upstream `irm | iex` command for this repository. The
+imported signature files still belong to the original Claude patch project and
+will be replaced once AI RTL Fix has its own release signing flow.
 
-To audit a release manually without installing:
+## Menu
 
-```powershell
-git clone https://github.com/shraga100/claude-desktop-rtl-patch
-cd claude-desktop-rtl-patch
-powershell -ExecutionPolicy Bypass -File tools\verify-signature.ps1
+The current menu is still Claude-focused while the project is being reshaped.
+The next UI milestone is:
+
+```text
+AI RTL Fix
+
+Detected apps:
+  Claude Desktop: Found
+  Codex Desktop: Found
+  ChatGPT Desktop: Not found
+
+Select action:
+  1. Patch Claude Desktop RTL
+  2. Restore Claude Desktop
+  3. Create Claude quick update shortcut
+  4. Enable Claude auto re-patch
+  5. Disable Claude auto re-patch
+  6. Exit
 ```
 
-The verifier reads the public key embedded in `install.ps1`, downloads no remote data, and exits 0 only on success.
+## How The Claude Patch Works
 
-### For maintainers
+Claude Desktop is an Electron application. The imported Claude patch modifies
+its packaged JavaScript and handles Claude-specific integrity checks:
 
-After cloning, install the pre-commit hook once:
+1. Extracts `app.asar`.
+2. Injects RTL JavaScript into renderer files.
+3. Repackages `app.asar`.
+4. Replaces the ASAR hash embedded in `claude.exe`.
+5. Re-signs modified binaries with a self-signed certificate.
+6. Updates Claude's service certificate expectations.
+7. Stores backups so the original state can be restored.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\install-hooks.ps1
-```
+Codex and ChatGPT may require different app-specific patch strategies. AI RTL
+Fix will treat each app as its own adapter rather than assuming Claude's exact
+integrity model applies everywhere.
 
-Whenever you edit `patch.ps1`, re-sign before committing:
+## Attribution
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\sign-release.ps1
-git add patch.ps1 patch.ps1.sig
-git commit ...
-```
+This project includes code adapted from
+[`shraga100/claude-desktop-rtl-patch`](https://github.com/shraga100/claude-desktop-rtl-patch),
+licensed under the MIT License. See [NOTICE.md](NOTICE.md) and [LICENSE](LICENSE).
 
-The hook will block any commit that touches `patch.ps1`, `patch.ps1.sig`, or `install.ps1` if the signature does not match — so a forgotten re-sign cannot reach `main`.
+## Disclaimer
 
-## Troubleshooting
-
-**"Node.js (npx) is required"** — Install Node.js from [nodejs.org](https://nodejs.org/) and reopen PowerShell.
-
-**Service won't start after patching** — Run the script again and choose **Restore** (option 2), then **Install** (option 1).
-
-**Claude updated and the patch broke** — Run the "Update Claude RTL" desktop shortcut, or use the Auto-Updater. If doing it manually, delete any `.bak` files in the Claude app directory and run the installer again.
-
-**`Import-Module ... The member AuditToString is already present`** — You ran the command in **PowerShell 7**, which has a known bug that breaks the patch. Use the built-in **Windows PowerShell** instead (it always ships with Windows):
-
-1. Press **Win + R**, type `powershell`, and hit **Enter** — this opens the classic **blue** Windows PowerShell window (not the black PowerShell 7 / `pwsh` one).
-   *(Or: click Start, type "Windows PowerShell", and open the blue icon.)*
-2. Paste the install command from above and run it.
-
-## Uninstall
-
-Run the script and choose option **2 (Restore)**. This restores all original files from backup and removes the self-signed certificate from your Windows certificate store. If you installed the Auto-Updater, choose option **5** to disable it.
+This tool modifies installed desktop application files. Use it at your own risk.
+Always keep backups, and restore the original state before reporting issues to
+the upstream app vendors.
 
 ## License
 
