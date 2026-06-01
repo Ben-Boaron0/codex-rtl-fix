@@ -9,7 +9,9 @@
 #>
 param(
     [switch]$Auto,
-    [string]$TrustedPubKey
+    [string]$TrustedPubKey,
+    [switch]$InspectCodex,
+    [switch]$SkipMain
 )
 
 # Env-var fallback for `irm | iex` invocations where param binding is not possible.
@@ -27,11 +29,12 @@ if ($TrustedPubKey) { $env:CLAUDE_RTL_TRUSTED_PUBKEY = $TrustedPubKey }
 # Supports both file execution and irm|iex piped execution
 # -----------------------------------------------------------------------------
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $IsAdmin) {
+if ((-not $SkipMain) -and (-not $IsAdmin)) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
     if ($PSCommandPath) {
         $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
         if ($Auto) { $args += '-Auto' }
+        if ($InspectCodex) { $args += '-InspectCodex' }
         if ($TrustedPubKey) { $args += @('-TrustedPubKey', $TrustedPubKey) }
         Start-Process -FilePath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
             -Verb RunAs `
@@ -986,6 +989,378 @@ function Show-DetectedApps {
             Write-Host ("  {0}: Not found ({1})" -f $app.Name, $app.SupportStatus.ToLowerInvariant()) -ForegroundColor DarkGray
         }
     }
+}
+
+function Get-ObjectPropertyValue {
+    param(
+        [Parameter(Mandatory)]$InputObject,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if ($null -eq $InputObject) { return $null }
+    $prop = $InputObject.PSObject.Properties[$Name]
+    if ($prop) { return $prop.Value }
+    return $null
+}
+
+function Read-AsarHeaderInfo {
+    param([Parameter(Mandatory)][string]$AsarPath)
+
+    $fs = [System.IO.File]::Open($AsarPath, 'Open', 'Read', 'ReadWrite')
+    try {
+        $br = [System.IO.BinaryReader]::new($fs)
+        $fs.Seek(12, [System.IO.SeekOrigin]::Begin) | Out-Null
+        $jsonSize = [int64]$br.ReadUInt32()
+        if ($jsonSize -le 0 -or $jsonSize -gt 10485760) {
+            throw "Abnormal ASAR header size: $jsonSize"
+        }
+
+        $jsonBytes = $br.ReadBytes([int]$jsonSize)
+        if ($jsonBytes.Length -ne $jsonSize) {
+            throw "Truncated ASAR header. Expected $jsonSize bytes, got $($jsonBytes.Length)."
+        }
+
+        $json = [System.Text.Encoding]::UTF8.GetString($jsonBytes)
+        $header = $json | ConvertFrom-Json
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($json))
+        $headerHash = [BitConverter]::ToString($hashBytes).Replace('-', '').ToLowerInvariant()
+
+        return [pscustomobject]@{
+            Header = $header
+            HeaderJson = $json
+            HeaderJsonSize = $jsonSize
+            DataOffset = 16 + $jsonSize
+            HeaderSha256 = $headerHash
+        }
+    } finally {
+        $fs.Close()
+    }
+}
+
+function Get-AsarNode {
+    param(
+        [Parameter(Mandatory)]$Header,
+        [Parameter(Mandatory)][string]$ArchivePath
+    )
+
+    $node = $Header
+    foreach ($part in ($ArchivePath -split '/')) {
+        if ([string]::IsNullOrWhiteSpace($part)) { continue }
+        $files = Get-ObjectPropertyValue -InputObject $node -Name 'files'
+        if ($null -eq $files) { return $null }
+        $node = Get-ObjectPropertyValue -InputObject $files -Name $part
+        if ($null -eq $node) { return $null }
+    }
+    return $node
+}
+
+function Get-AsarEntryText {
+    param(
+        [Parameter(Mandatory)][string]$AsarPath,
+        [Parameter(Mandatory)]$HeaderInfo,
+        [Parameter(Mandatory)][string]$ArchivePath
+    )
+
+    $node = Get-AsarNode -Header $HeaderInfo.Header -ArchivePath $ArchivePath
+    if ($null -eq $node) { return $null }
+
+    $offsetValue = Get-ObjectPropertyValue -InputObject $node -Name 'offset'
+    $sizeValue = Get-ObjectPropertyValue -InputObject $node -Name 'size'
+    if ($null -eq $offsetValue -or $null -eq $sizeValue) { return $null }
+
+    $offset = [int64]$offsetValue
+    $size = [int64]$sizeValue
+    if ($size -lt 0 -or $size -gt 10485760) {
+        throw "Refusing to read suspicious ASAR entry size for $ArchivePath`: $size"
+    }
+
+    $fs = [System.IO.File]::Open($AsarPath, 'Open', 'Read', 'ReadWrite')
+    try {
+        $fs.Seek(($HeaderInfo.DataOffset + $offset), [System.IO.SeekOrigin]::Begin) | Out-Null
+        $bytes = New-Object byte[] $size
+        $read = $fs.Read($bytes, 0, [int]$size)
+        if ($read -ne $size) {
+            throw "Truncated ASAR entry $ArchivePath. Expected $size bytes, got $read."
+        }
+        return [System.Text.Encoding]::UTF8.GetString($bytes)
+    } finally {
+        $fs.Close()
+    }
+}
+
+function Get-AsarEntryPaths {
+    param(
+        [Parameter(Mandatory)]$Node,
+        [string]$Prefix = ''
+    )
+
+    $files = Get-ObjectPropertyValue -InputObject $Node -Name 'files'
+    if ($null -eq $files) { return @() }
+
+    $paths = @()
+    foreach ($prop in $files.PSObject.Properties) {
+        $path = if ($Prefix) { "$Prefix/$($prop.Name)" } else { $prop.Name }
+        $childFiles = Get-ObjectPropertyValue -InputObject $prop.Value -Name 'files'
+        if ($childFiles) {
+            $paths += Get-AsarEntryPaths -Node $prop.Value -Prefix $path
+        } else {
+            $paths += $path
+        }
+    }
+    return $paths
+}
+
+function Test-AsarIntegrityMetadataPresent {
+    param([Parameter(Mandatory)]$Node)
+
+    if (Get-ObjectPropertyValue -InputObject $Node -Name 'integrity') { return $true }
+
+    $files = Get-ObjectPropertyValue -InputObject $Node -Name 'files'
+    if ($null -eq $files) { return $false }
+    foreach ($prop in $files.PSObject.Properties) {
+        if (Test-AsarIntegrityMetadataPresent -Node $prop.Value) { return $true }
+    }
+    return $false
+}
+
+function Test-CspAllowsExternalSelfScript {
+    param([AllowEmptyString()][string]$IndexHtml)
+
+    if ([string]::IsNullOrWhiteSpace($IndexHtml)) { return $false }
+    $cspMatch = [regex]::Match($IndexHtml, 'Content-Security-Policy[^>]*\scontent\s*=\s*"([^"]*)"', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if (-not $cspMatch.Success) {
+        $cspMatch = [regex]::Match($IndexHtml, "Content-Security-Policy[^>]*\scontent\s*=\s*'([^']*)'", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    }
+    if (-not $cspMatch.Success) { return $true }
+
+    $csp = [System.Net.WebUtility]::HtmlDecode($cspMatch.Groups[1].Value)
+    $scriptMatch = [regex]::Match($csp, "(^|;)\s*script-src\s+([^;]+)", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if (-not $scriptMatch.Success) { return $true }
+
+    return [bool]($scriptMatch.Groups[2].Value -match "(^|\s)'self'(\s|$)")
+}
+
+function Get-CodexAsarInspection {
+    param([Parameter(Mandatory)][string]$AsarPath)
+
+    $result = [ordered]@{
+        AsarPath = $AsarPath
+        AsarExists = $false
+        AsarSize = 0
+        HeaderSha256 = $null
+        IndexHtmlFound = $false
+        ExternalScriptInjectionAllowed = $false
+        CandidateInjectionPointFound = $false
+        RendererScripts = @()
+        RendererStyles = @()
+        AsarIntegrityMetadataPresent = $false
+        Error = $null
+    }
+
+    if (-not (Test-Path -LiteralPath $AsarPath)) {
+        return [pscustomobject]$result
+    }
+
+    try {
+        $item = Get-Item -LiteralPath $AsarPath -ErrorAction Stop
+        $headerInfo = Read-AsarHeaderInfo -AsarPath $AsarPath
+        $entryPaths = @(Get-AsarEntryPaths -Node $headerInfo.Header)
+        $indexHtml = Get-AsarEntryText -AsarPath $AsarPath -HeaderInfo $headerInfo -ArchivePath 'webview/index.html'
+        $rendererScripts = @($entryPaths | Where-Object { $_ -like 'webview/assets/*.js' } | Sort-Object)
+        $rendererStyles = @($entryPaths | Where-Object { $_ -like 'webview/assets/*.css' } | Sort-Object)
+        $allowsExternalScript = Test-CspAllowsExternalSelfScript -IndexHtml $indexHtml
+
+        $result.AsarExists = $true
+        $result.AsarSize = $item.Length
+        $result.HeaderSha256 = $headerInfo.HeaderSha256
+        $result.IndexHtmlFound = [bool]$indexHtml
+        $result.ExternalScriptInjectionAllowed = $allowsExternalScript
+        $result.CandidateInjectionPointFound = ([bool]$indexHtml -and $allowsExternalScript -and $rendererScripts.Count -gt 0)
+        $result.RendererScripts = $rendererScripts
+        $result.RendererStyles = $rendererStyles
+        $result.AsarIntegrityMetadataPresent = Test-AsarIntegrityMetadataPresent -Node $headerInfo.Header
+    } catch {
+        $result.Error = $_.Exception.Message
+    }
+
+    return [pscustomobject]$result
+}
+
+function Get-CodexInstallInspection {
+    $pkg = Get-AppxPackage OpenAI.Codex -ErrorAction SilentlyContinue | Select-Object -First 1
+    $installLocation = if ($pkg) { $pkg.InstallLocation } else { $null }
+    $appDir = if ($installLocation) { Join-Path $installLocation 'app' } else { $null }
+    $resourcesDir = if ($appDir) { Join-Path $appDir 'resources' } else { $null }
+    $appExe = if ($appDir) { Join-Path $appDir 'Codex.exe' } else { $null }
+    $cliExe = if ($resourcesDir) { Join-Path $resourcesDir 'codex.exe' } else { $null }
+    $asarPath = if ($resourcesDir) { Join-Path $resourcesDir 'app.asar' } else { $null }
+    $asarInspection = if ($asarPath) { Get-CodexAsarInspection -AsarPath $asarPath } else { $null }
+
+    return [pscustomobject]@{
+        PackageFound = [bool]$pkg
+        PackageName = if ($pkg) { $pkg.Name } else { $null }
+        PackageVersion = if ($pkg) { $pkg.Version.ToString() } else { $null }
+        InstallLocation = $installLocation
+        AppExe = $appExe
+        CliExe = $cliExe
+        AsarPath = $asarPath
+        AsarInspection = $asarInspection
+    }
+}
+
+function Test-FileContainsAsciiText {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Needle
+    )
+
+    if (-not (Test-Path -LiteralPath $Path) -or [string]::IsNullOrEmpty($Needle)) { return $false }
+    $bufferSize = 1048576
+    $overlapSize = [Math]::Max(0, $Needle.Length - 1)
+    $previousText = ''
+    $fs = [System.IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
+    try {
+        $buffer = New-Object byte[] $bufferSize
+        while (($read = $fs.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $chunkText = [System.Text.Encoding]::ASCII.GetString($buffer, 0, $read)
+            $combinedText = $previousText + $chunkText
+            if ($combinedText.Contains($Needle)) {
+                return $true
+            }
+
+            $keep = [Math]::Min($overlapSize, $combinedText.Length)
+            if ($keep -gt 0) {
+                $previousText = $combinedText.Substring($combinedText.Length - $keep)
+            } else {
+                $previousText = ''
+            }
+        }
+    } finally {
+        $fs.Close()
+    }
+
+    return $false
+}
+
+function Get-CodexHashEmbeddingReport {
+    param([Parameter(Mandatory)]$Inspection)
+
+    $headerHash = if ($Inspection.AsarInspection) { $Inspection.AsarInspection.HeaderSha256 } else { $null }
+    $fullHash = $null
+    if ($Inspection.AsarPath -and (Test-Path -LiteralPath $Inspection.AsarPath)) {
+        $fullHash = (Get-FileHash -LiteralPath $Inspection.AsarPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+
+    $targets = @(
+        [pscustomobject]@{ Name = 'Codex.exe'; Path = $Inspection.AppExe },
+        [pscustomobject]@{ Name = 'resources\codex.exe'; Path = $Inspection.CliExe }
+    )
+
+    $rows = @()
+    foreach ($target in $targets) {
+        $headerFound = $false
+        $fullFound = $false
+        if ($target.Path -and (Test-Path -LiteralPath $target.Path)) {
+            if ($headerHash) { $headerFound = Test-FileContainsAsciiText -Path $target.Path -Needle $headerHash }
+            if ($fullHash) { $fullFound = Test-FileContainsAsciiText -Path $target.Path -Needle $fullHash }
+        }
+        $rows += [pscustomobject]@{
+            Name = $target.Name
+            Path = $target.Path
+            Exists = [bool]($target.Path -and (Test-Path -LiteralPath $target.Path))
+            HeaderHashFound = $headerFound
+            FullAsarHashFound = $fullFound
+        }
+    }
+
+    return [pscustomobject]@{
+        HeaderSha256 = $headerHash
+        FullAsarSha256 = $fullHash
+        Targets = $rows
+    }
+}
+
+function Get-CodexPhaseTwoRecommendation {
+    param([Parameter(Mandatory)]$Inspection)
+
+    if (-not $Inspection.AsarExists) {
+        return 'Do not patch yet: app.asar was not found.'
+    }
+    if ($Inspection.Error) {
+        return "Do not patch yet: ASAR inspection failed ($($Inspection.Error))."
+    }
+    if (-not $Inspection.IndexHtmlFound) {
+        return 'Do not patch yet: webview/index.html was not found.'
+    }
+    if (-not $Inspection.ExternalScriptInjectionAllowed) {
+        return 'Do not use simple external JS injection yet: Content-Security-Policy does not allow same-origin scripts.'
+    }
+    if (-not $Inspection.CandidateInjectionPointFound) {
+        return 'Do not patch yet: renderer assets were not found next to webview/index.html.'
+    }
+    return 'Phase two should try external JS injection into webview/index.html, with backup/restore before any write.'
+}
+
+function Show-CodexInspection {
+    Write-Host "`nCodex Desktop inspection (read-only)" -ForegroundColor Cyan
+    Write-Host "No files will be modified, no processes will be started, and no scheduled tasks will be changed." -ForegroundColor DarkGray
+
+    $inspection = Get-CodexInstallInspection
+    if (-not $inspection.PackageFound) {
+        Write-Host "`nCodex Desktop was not found on this system." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "`nPackage:" -ForegroundColor White
+    Write-Host "  Name:    $($inspection.PackageName)"
+    Write-Host "  Version: $($inspection.PackageVersion)"
+    Write-Host "  Path:    $($inspection.InstallLocation)"
+    Write-Host "  App exe: $($inspection.AppExe)"
+    Write-Host "  ASAR:    $($inspection.AsarPath)"
+
+    $asar = $inspection.AsarInspection
+    Write-Host "`nASAR:" -ForegroundColor White
+    if (-not $asar -or -not $asar.AsarExists) {
+        Write-Host "  app.asar: Missing" -ForegroundColor Red
+        return
+    }
+
+    Write-Host ("  app.asar: Present ({0:N0} bytes)" -f $asar.AsarSize) -ForegroundColor Green
+    Write-Host "  webview/index.html: $(if ($asar.IndexHtmlFound) { 'Found' } else { 'Missing' })"
+    Write-Host "  External script allowed by CSP: $(if ($asar.ExternalScriptInjectionAllowed) { 'Yes' } else { 'No' })"
+    Write-Host "  Candidate injection point: $(if ($asar.CandidateInjectionPointFound) { 'Found' } else { 'Missing' })"
+    Write-Host "  ASAR integrity metadata: $(if ($asar.AsarIntegrityMetadataPresent) { 'Present' } else { 'Not found' })"
+    if ($asar.Error) {
+        Write-Host "  Inspection error: $($asar.Error)" -ForegroundColor Red
+    }
+
+    Write-Host "`nRenderer assets:" -ForegroundColor White
+    $scripts = @($asar.RendererScripts | Select-Object -First 8)
+    $styles = @($asar.RendererStyles | Select-Object -First 5)
+    if ($scripts.Count -eq 0) { Write-Host "  Scripts: none found" -ForegroundColor Yellow }
+    else { foreach ($script in $scripts) { Write-Host "  JS:  $script" } }
+    if ($styles.Count -eq 0) { Write-Host "  Styles: none found" -ForegroundColor Yellow }
+    else { foreach ($style in $styles) { Write-Host "  CSS: $style" } }
+
+    Write-Host "`nHash embedding probe:" -ForegroundColor White
+    try {
+        $hashReport = Get-CodexHashEmbeddingReport -Inspection $inspection
+        Write-Host "  ASAR header SHA256: $($hashReport.HeaderSha256)"
+        Write-Host "  Full ASAR SHA256:   $($hashReport.FullAsarSha256)"
+        foreach ($target in $hashReport.Targets) {
+            if (-not $target.Exists) {
+                Write-Host "  $($target.Name): missing"
+            } else {
+                Write-Host "  $($target.Name): header hash embedded=$($target.HeaderHashFound), full hash embedded=$($target.FullAsarHashFound)"
+            }
+        }
+    } catch {
+        Write-Host "  Hash probe failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    Write-Host "`nRecommendation:" -ForegroundColor White
+    Write-Host "  $(Get-CodexPhaseTwoRecommendation -Inspection $asar)" -ForegroundColor Cyan
 }
 
 function Stop-ClaudeServices {
@@ -2346,7 +2721,7 @@ function Show-Menu {
     Write-Host "  3. Create Claude quick update shortcut" -ForegroundColor Green
     Write-Host "  4. Enable Claude auto re-patch" -ForegroundColor Green
     Write-Host "  5. Disable Claude auto re-patch" -ForegroundColor White
-    Write-Host "  6. Inspect Codex Desktop (coming next)" -ForegroundColor DarkGray
+    Write-Host "  6. Inspect Codex Desktop" -ForegroundColor White
     Write-Host "  7. Exit" -ForegroundColor White
 
     $choice = Read-Host "`nEnter your choice (1/2/3/4/5/6/7)"
@@ -2391,13 +2766,7 @@ function Show-Menu {
         Show-Menu
     }
     elseif ($choice -eq '6') {
-        Write-Host "`nCodex Desktop support is detected but not implemented yet." -ForegroundColor Yellow
-        $codexDir = Find-CodexDir
-        if ($codexDir) {
-            Write-Host "Found Codex at: $codexDir" -ForegroundColor Green
-        } else {
-            Write-Host "Codex Desktop was not found on this system." -ForegroundColor DarkGray
-        }
+        Show-CodexInspection
         Write-Host "`nPress Enter to return to menu..."
         $null = Read-Host
         Show-Menu
@@ -2407,6 +2776,15 @@ function Show-Menu {
 }
 
 # Start the application
+if ($SkipMain) {
+    return
+}
+
+if ($InspectCodex) {
+    Show-CodexInspection
+    Exit
+}
+
 if ($Auto) {
     Write-Host "`n=======================================================" -ForegroundColor Cyan
     Write-Host "  AUTO RE-PATCH MODE (triggered by Claude update)" -ForegroundColor Cyan

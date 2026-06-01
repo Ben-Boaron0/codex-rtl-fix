@@ -11,7 +11,7 @@ RTL/LTR text rendering.
 ## Current Status
 
 - Claude Desktop patching is imported from the original Claude Desktop RTL Patch.
-- Codex Desktop support is planned next.
+- Codex Desktop read-only inspection is available as the next discovery step.
 - ChatGPT Desktop support is planned after Codex discovery.
 - The verified `irm | iex` installer flow needs a new AI RTL Fix signing key
   before public releases.
@@ -41,7 +41,7 @@ will be replaced once AI RTL Fix has its own release signing flow.
 ## Menu
 
 The current menu is still Claude-focused while the project is being reshaped.
-The next UI milestone is:
+Codex inspection is read-only and does not patch or launch Codex.
 
 ```text
 AI RTL Fix
@@ -57,7 +57,8 @@ Select action:
   3. Create Claude quick update shortcut
   4. Enable Claude auto re-patch
   5. Disable Claude auto re-patch
-  6. Exit
+  6. Inspect Codex Desktop
+  7. Exit
 ```
 
 ## How The Claude Patch Works
@@ -76,6 +77,20 @@ its packaged JavaScript and handles Claude-specific integrity checks:
 Codex and ChatGPT may require different app-specific patch strategies. AI RTL
 Fix will treat each app as its own adapter rather than assuming Claude's exact
 integrity model applies everywhere.
+
+## Codex Inspection
+
+Run the normal menu and choose option `6`, or run the read-only inspection
+directly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\patch.ps1 -InspectCodex
+```
+
+The inspection reports the installed Codex package, `app.asar` shape,
+`webview/index.html` injection candidate, renderer assets, ASAR integrity
+metadata, and whether the current ASAR hashes appear embedded in Codex binaries.
+It does not modify Codex files.
 
 ## Attribution
 
