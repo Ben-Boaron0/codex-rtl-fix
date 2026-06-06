@@ -11,8 +11,8 @@ RTL/LTR text rendering.
 ## Current Status
 
 - Claude Desktop patching is imported from the original Claude Desktop RTL Patch.
-- Codex Desktop read-only inspection is available as the next discovery step.
-- ChatGPT Desktop support is planned after Codex discovery.
+- Codex Desktop runtime RTL patching is available without modifying the Store package.
+- ChatGPT Desktop support is planned after Codex runtime validation.
 - The verified `irm | iex` installer flow uses an AI RTL Fix signing key.
 
 ## What It Does Today
@@ -43,8 +43,11 @@ irm https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main/install.ps1 | 
 ## Menu
 
 The menu is app-first: select target apps, then choose an action available for
-that selection. Codex inspection is read-only and does not patch or launch
-Codex.
+that selection. Codex patching installs a stable per-user runtime and replaces
+only normal writable Codex `.lnk` shortcuts that already exist. It does not add
+a duplicate Start Menu shortcut, modify Codex package files, Store app identity
+entries, taskbar registry data, Start layout policy, or install a Codex
+background watcher.
 
 ```text
 AI RTL Fix
@@ -60,7 +63,9 @@ Selected apps:
   - Codex Desktop
 
 Select action:
-  1. Inspect selected apps
+  1. Patch selected apps
+  2. Restore selected apps
+  3. Inspect selected apps
   B. Back to app selection
   Q. Exit
 ```
@@ -98,12 +103,63 @@ its packaged JavaScript and handles Claude-specific integrity checks:
 7. Stores backups so the original state can be restored.
 
 Codex and ChatGPT may require different app-specific patch strategies. AI RTL
-Fix will treat each app as its own adapter rather than assuming Claude's exact
+Fix treats each app as its own adapter rather than assuming Claude's exact
 integrity model applies everywhere.
+
+## Codex Runtime RTL Patch
+
+Codex Desktop is installed as a Microsoft Store package, so AI RTL Fix does not
+edit `app.asar`, binaries, signatures, or files under `WindowsApps`. Instead,
+the Codex patch installs a persistent runtime under `%LOCALAPPDATA%\AI RTL Fix`.
+It backs up and replaces normal writable Codex `.lnk` shortcuts in approved
+user-facing locations, without creating a duplicate Start Menu shortcut next to
+the Microsoft Store Codex entry. Replaced shortcuts point to a small
+`wscript.exe` launcher so Codex can be started without a persistent visible
+PowerShell window.
+
+The launcher starts Codex directly from its installed `app\Codex.exe` with a
+local Chromium DevTools Protocol port bound to `127.0.0.1`. This direct launch
+path is required because Microsoft Store app-identity activation does not expose
+the DevTools endpoint needed for automatic runtime injection. After Codex
+exposes CDP, AI RTL Fix injects a small idempotent RTL script into Codex
+renderer targets and exits. During patching, AI RTL Fix restarts Codex once if
+it is already open so the current session receives the runtime injection
+immediately. The script reapplies itself when React recreates the conversation
+or composer DOM.
+The script is content-aware: Hebrew, Arabic, Persian, and mixed RTL text blocks
+get direction fixes, while English-only text, markdown plans, code, controls,
+and app chrome stay in Codex's normal layout.
+
+Windows Defender Controlled Folder Access may warn that `Codex.exe` was blocked
+from a protected workspace such as `%USERPROFILE%\Documents\Codex` when Codex is
+started through this direct launch path. AI RTL Fix stores its runtime and state
+under `%LOCALAPPDATA%\AI RTL Fix` and does not write to Documents, but the
+automated injection mode must launch Codex with the local CDP flags. Users who
+enable Controlled Folder Access may need to allow Codex or keep Codex workspaces
+outside protected folders.
+
+The runtime state is stored at:
+
+```text
+%LOCALAPPDATA%\AI RTL Fix\Codex\state.json
+```
+
+The installed runtime files are stored at:
+
+```text
+%LOCALAPPDATA%\AI RTL Fix\runtime
+```
+
+Windows Store app identity entries such as `OpenAI.Codex_...!App` are reported
+but not rewritten. If Windows exposes no writable Codex shortcut for a launch
+path, AI RTL Fix will not try to force that surface. Restore removes AI RTL
+Fix-created Codex shortcuts from earlier builds only when they are recognized as
+AI RTL Fix launchers, restores backed-up `.lnk` files byte-for-byte, and also
+cleans up the legacy `Codex RTL` shortcut name from earlier builds.
 
 ## Codex Inspection
 
-Run the normal menu and choose option `6`, or run the read-only inspection
+Run the normal menu and choose Inspect, or run the read-only inspection
 directly:
 
 ```powershell

@@ -78,7 +78,7 @@ try {
     Assert-True (@($analysis.RendererStyles) -contains 'webview/assets/app-main-test.css') 'Renderer stylesheet should be listed.'
 
     $recommendation = Get-CodexPhaseTwoRecommendation -Inspection $analysis
-    Assert-True ($recommendation -match 'external JS injection') 'Recommendation should choose external JS injection.'
+    Assert-True ($recommendation -match 'runtime CDP injection') 'Recommendation should choose runtime CDP injection.'
     Assert-True (Test-CspAllowsExternalSelfScript '<meta http-equiv="Content-Security-Policy" content="script-src ''self'' ''wasm-unsafe-eval''; style-src ''self'' ''unsafe-inline''">') 'CSP parser should allow quoted self in double-quoted content attributes.'
     Assert-True (Test-CspAllowsExternalSelfScript '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;">') 'CSP parser should decode HTML entities before checking script-src.'
 

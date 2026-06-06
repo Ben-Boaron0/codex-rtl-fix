@@ -21,7 +21,7 @@ function Get-AppMenuCapabilities {
             }
             return @()
         }
-        'codex' { return @('Inspect') }
+        'codex' { return @('Patch', 'Restore', 'Inspect') }
         default { return @() }
     }
 }
@@ -190,39 +190,55 @@ function Invoke-SelectedAppAction {
 
     $selectedById = @{}
     foreach ($app in $SelectedApps) { $selectedById[$app.Id] = $app }
+    $invokeWithConfirmation = {
+        param(
+            [Parameter(Mandatory)][string]$Warning,
+            [Parameter(Mandatory)][scriptblock]$Action
+        )
+
+        Write-Host "`nWARNING: $Warning" -ForegroundColor Yellow
+        $confirm = Read-Host "Do you want to continue? (Y/n)"
+        if ($confirm -eq 'n' -or $confirm -eq 'N') {
+            Write-Host "Operation cancelled."
+            return
+        }
+
+        try {
+            & $Action
+        } catch {
+            Write-Host "`n[!] Final Script Status:" -ForegroundColor DarkGray
+            Write-Host $_.Exception.Message -ForegroundColor Red
+        }
+    }
 
     switch ($ActionId) {
         'Patch' {
             if ($selectedById.ContainsKey('claude')) {
-                Write-Host "`nWARNING: This will automatically close Claude Desktop and its background services." -ForegroundColor Yellow
-                $confirm = Read-Host "Do you want to continue? (Y/n)"
-                if ($confirm -eq 'n' -or $confirm -eq 'N') {
-                    Write-Host "Operation cancelled."
-                } else {
-                    try { Install-Patch } catch {
-                        Write-Host "`n[!] Final Script Status:" -ForegroundColor DarkGray
-                        Write-Host $_.Exception.Message -ForegroundColor Red
-                    }
-                }
+                & $invokeWithConfirmation `
+                    -Warning 'This will automatically close Claude Desktop and its background services.' `
+                    -Action { Install-Patch }
             }
-            foreach ($app in $SelectedApps | Where-Object { $_.Id -ne 'claude' }) {
+            if ($selectedById.ContainsKey('codex')) {
+                & $invokeWithConfirmation `
+                    -Warning 'This may restart Codex once so it can launch with local RTL injection support.' `
+                    -Action { Install-CodexRtlPatch }
+            }
+            foreach ($app in $SelectedApps | Where-Object { $_.Id -ne 'claude' -and $_.Id -ne 'codex' }) {
                 Write-Warn "$($app.Name) skipped: patch not supported yet."
             }
         }
         'Restore' {
             if ($selectedById.ContainsKey('claude')) {
-                Write-Host "`nWARNING: This will automatically close Claude Desktop and its background services." -ForegroundColor Yellow
-                $confirm = Read-Host "Do you want to continue? (Y/n)"
-                if ($confirm -eq 'n' -or $confirm -eq 'N') {
-                    Write-Host "Operation cancelled."
-                } else {
-                    try { Restore-Patch } catch {
-                        Write-Host "`n[!] Final Script Status:" -ForegroundColor DarkGray
-                        Write-Host $_.Exception.Message -ForegroundColor Red
-                    }
-                }
+                & $invokeWithConfirmation `
+                    -Warning 'This will automatically close Claude Desktop and its background services.' `
+                    -Action { Restore-Patch }
             }
-            foreach ($app in $SelectedApps | Where-Object { $_.Id -ne 'claude' }) {
+            if ($selectedById.ContainsKey('codex')) {
+                & $invokeWithConfirmation `
+                    -Warning 'This will remove the Codex runtime RTL launcher and may require a Codex restart to fully clear injected state.' `
+                    -Action { Restore-CodexRtlPatch }
+            }
+            foreach ($app in $SelectedApps | Where-Object { $_.Id -ne 'claude' -and $_.Id -ne 'codex' }) {
                 Write-Warn "$($app.Name) skipped: restore not supported yet."
             }
         }

@@ -156,7 +156,7 @@ function Get-CodexPhaseTwoRecommendation {
     if (-not $Inspection.CandidateInjectionPointFound) {
         return 'Do not patch yet: renderer assets were not found next to webview/index.html.'
     }
-    return 'Phase two should try external JS injection into webview/index.html, with backup/restore before any write.'
+    return 'Phase two should use runtime CDP injection so Codex Store package files are not modified.'
 }
 
 function Show-CodexInspection {

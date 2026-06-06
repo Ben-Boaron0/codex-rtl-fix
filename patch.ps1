@@ -11,6 +11,7 @@ param(
     [switch]$Auto,
     [string]$TrustedPubKey,
     [switch]$InspectCodex,
+    [switch]$LaunchCodexRtl,
     [switch]$SkipMain
 )
 
@@ -29,7 +30,8 @@ if ($TrustedPubKey) { $env:CLAUDE_RTL_TRUSTED_PUBKEY = $TrustedPubKey }
 # Supports both file execution and irm|iex piped execution
 # -----------------------------------------------------------------------------
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if ((-not $SkipMain) -and (-not $IsAdmin)) {
+$RequiresElevation = (-not $LaunchCodexRtl)
+if ((-not $SkipMain) -and $RequiresElevation -and (-not $IsAdmin)) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
     if ($PSCommandPath) {
         $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
@@ -81,6 +83,8 @@ $modules = @(
     'apps/claude/detection.ps1',
     'apps/codex/detection.ps1',
     'apps/codex/inspection.ps1',
+    'apps/codex/rtl-payload.ps1',
+    'apps/codex/runtime-rtl.ps1',
     'apps/claude/patching.ps1',
     'ui/menu.ps1'
 )
@@ -93,6 +97,7 @@ foreach ($module in $modules) {
     . $modulePath
 }
 
+$script:AiRtlPatchScriptPath = $PSCommandPath
 
 # Start the application
 if ($SkipMain) {
@@ -101,6 +106,11 @@ if ($SkipMain) {
 
 if ($InspectCodex) {
     Show-CodexInspection
+    Exit
+}
+
+if ($LaunchCodexRtl) {
+    Launch-CodexRtl
     Exit
 }
 
