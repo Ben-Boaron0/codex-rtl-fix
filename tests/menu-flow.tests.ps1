@@ -22,6 +22,7 @@ function Assert-Equal {
 function Reset-TestState {
     $script:Calls = @()
     $script:Output = @()
+    $script:Prompts = @()
 }
 
 function Write-Host {
@@ -36,6 +37,7 @@ function Write-Host {
 
 function Clear-Host {}
 function Start-Sleep { param([int]$Seconds) }
+function Read-Host { param([string]$Prompt) return '' }
 
 function Install-Patch { $script:Calls += 'Install-Patch' }
 function Restore-Patch { $script:Calls += 'Restore-Patch' }
@@ -43,6 +45,8 @@ function Create-UpdateShortcut { $script:Calls += 'Create-UpdateShortcut' }
 function Install-AutoUpdateTask { $script:Calls += 'Install-AutoUpdateTask' }
 function Uninstall-AutoUpdateTask { $script:Calls += 'Uninstall-AutoUpdateTask' }
 function Show-CodexInspection { $script:Calls += 'Show-CodexInspection' }
+function Install-CodexRtlPatch { $script:Calls += 'Install-CodexRtlPatch' }
+function Restore-CodexRtlPatch { $script:Calls += 'Restore-CodexRtlPatch' }
 
 function New-TestApp {
     param(
@@ -82,7 +86,23 @@ Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Show-CodexInspection' })
 Reset-TestState
 Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
 Assert-Equal 0 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Codex patch should not dispatch Claude patch.'
-Assert-True (($script:Output -join "`n") -match 'Codex Desktop.*patch not supported yet') 'Codex patch should print unsupported skip.'
+Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Codex patch should dispatch runtime RTL patch.'
+
+Reset-TestState
+Invoke-SelectedAppAction -ActionId 'Restore' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
+Assert-Equal 0 @($script:Calls | Where-Object { $_ -eq 'Restore-Patch' }).Count 'Codex restore should not dispatch Claude restore.'
+Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Restore-CodexRtlPatch' }).Count 'Codex restore should dispatch runtime RTL restore.'
+
+Reset-TestState
+function Read-Host {
+    param([string]$Prompt)
+    if ($Prompt) { $script:Prompts += $Prompt }
+    return 'n'
+}
+Invoke-SelectedAppAction -ActionId 'Restore' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
+Assert-Equal 0 @($script:Calls | Where-Object { $_ -eq 'Restore-CodexRtlPatch' }).Count 'Codex restore should honor cancellation.'
+Assert-True (($script:Prompts | Where-Object { $_ -match 'continue' }).Count -eq 1) 'Codex restore should use the standard confirmation prompt.'
+function Read-Host { param([string]$Prompt) return '' }
 
 Reset-TestState
 Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @(
@@ -90,7 +110,7 @@ Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @(
     (New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned')
 )
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Claude patch should dispatch once with mixed selection.'
-Assert-True (($script:Output -join "`n") -match 'Codex Desktop.*patch not supported yet') 'Mixed patch should skip Codex.'
+Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Mixed patch should dispatch Codex runtime RTL once.'
 
 $chatGpt = New-TestApp -Id 'chatgpt' -Name 'ChatGPT Desktop' -Found:$false -SupportStatus 'Planned' -Selected:$false
 Assert-True (-not (Test-AppMenuSelectable -App $chatGpt)) 'ChatGPT should not be selectable.'
