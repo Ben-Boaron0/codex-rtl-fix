@@ -214,7 +214,11 @@ function Get-StableShortcutBackupPath {
 
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($ShortcutPath.ToLowerInvariant())
     $sha = [System.Security.Cryptography.SHA256]::Create()
-    $hash = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
+    try {
+        $hash = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
     Join-Path (Get-CodexShortcutBackupRoot) "$hash.lnk"
 }
 
@@ -455,7 +459,7 @@ function Start-CodexWithRtlDebug {
         -WorkingDirectory (Get-CodexRtlWorkingDirectory) | Out-Null
 }
 
-function Ensure-CodexLaunchedForRtl {
+function Start-CodexForRtl {
     param(
         [Parameter(Mandatory)]$Inspection,
         [Parameter(Mandatory)][int]$Port,
@@ -490,8 +494,7 @@ function Test-CodexDevToolsTarget {
     if (-not $Target.webSocketDebuggerUrl) { return $false }
 
     $url = [string]$Target.url
-    $title = [string]$Target.title
-    return ($url -like 'app://*' -or $title -match 'Codex')
+    return ($url -like 'app://*')
 }
 
 function Get-CodexDevToolsTargets {
@@ -549,8 +552,24 @@ function Invoke-CodexCdpCommand {
         $segment = [ArraySegment[byte]]::new($bytes)
         $client.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [Threading.CancellationToken]::None).GetAwaiter().GetResult()
         $receive = [ArraySegment[byte]]::new($buffer)
+        $message = [System.Collections.Generic.List[byte]]::new()
         $result = $client.ReceiveAsync($receive, [Threading.CancellationToken]::None).GetAwaiter().GetResult()
-        return [System.Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
+        if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
+            throw 'Codex DevTools closed the WebSocket before returning a response.'
+        }
+        if ($result.Count -gt 0) {
+            $message.AddRange([byte[]]$buffer[0..($result.Count - 1)])
+        }
+        while (-not $result.EndOfMessage) {
+            $result = $client.ReceiveAsync($receive, [Threading.CancellationToken]::None).GetAwaiter().GetResult()
+            if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
+                throw 'Codex DevTools closed the WebSocket before returning a complete response.'
+            }
+            if ($result.Count -gt 0) {
+                $message.AddRange([byte[]]$buffer[0..($result.Count - 1)])
+            }
+        }
+        return [System.Text.Encoding]::UTF8.GetString($message.ToArray())
     } finally {
         if ($client.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
             $client.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, 'done', [Threading.CancellationToken]::None).GetAwaiter().GetResult()
@@ -655,7 +674,7 @@ function Install-CodexRtlPatch {
         )
     Save-CodexRtlState -State $state
 
-    Ensure-CodexLaunchedForRtl -Inspection $inspection -Port $port -AllowRestart | Out-Null
+    Start-CodexForRtl -Inspection $inspection -Port $port -AllowRestart | Out-Null
     Invoke-CodexRtlInjection -Port $port | Out-Null
 
     Write-Host "Codex RTL launcher installed. Replaced $($backups.Count) writable Codex shortcut(s), skipped $($skippedCodexShortcuts.Count) non-replaceable Codex shortcut(s). Use replaced shortcuts to launch Codex with RTL support." -ForegroundColor Green
@@ -702,6 +721,6 @@ function Launch-CodexRtl {
 
     $state = Read-CodexRtlState
     $port = if ($state -and $state.Port) { [int]$state.Port } else { Get-CodexRtlDefaultPort }
-    Ensure-CodexLaunchedForRtl -Inspection $inspection -Port $port -AllowRestart
+    Start-CodexForRtl -Inspection $inspection -Port $port -AllowRestart
     Invoke-CodexRtlInjection -Port $port | Out-Null
 }

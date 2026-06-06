@@ -37,7 +37,6 @@ if ((-not $SkipMain) -and $RequiresElevation -and (-not $IsAdmin)) {
         $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
         if ($Auto) { $args += '-Auto' }
         if ($InspectCodex) { $args += '-InspectCodex' }
-        if ($LaunchCodexRtl) { $args += '-LaunchCodexRtl' }
         if ($TrustedPubKey) { $args += @('-TrustedPubKey', $TrustedPubKey) }
         Start-Process -FilePath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
             -Verb RunAs `

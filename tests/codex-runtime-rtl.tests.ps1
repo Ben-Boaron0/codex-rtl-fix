@@ -69,6 +69,7 @@ Assert-True (-not ($installBody -match 'Install-CodexRtlShortcut')) 'Patch flow 
 Assert-True ($installBody.Contains('OwnedArtifacts')) 'Patch flow should persist owned artifacts explicitly.'
 $launchBody = (Get-Command -Name Launch-CodexRtl -CommandType Function).ScriptBlock.ToString()
 Assert-True (-not ($launchBody.Contains('Start-CodexWithRtlActivation'))) 'Codex launch should use the known-working direct executable path.'
+Assert-True ($launchBody.Contains('Start-CodexForRtl')) 'Codex launch should delegate to the approved-verb launch helper.'
 
 $roots = @(Get-CodexShortcutSearchRoots)
 Assert-True ($roots -contains (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs')) 'Shortcut search should include user Start Menu programs.'
@@ -117,6 +118,10 @@ Assert-True (Test-CodexShortcutReplaceable -Shortcut $fakeCodexShortcut) 'Writab
 Assert-True (-not (Test-CodexShortcutReplaceable -Shortcut $ambiguousShortcut)) 'Ambiguous non-Codex shortcuts should not be replaceable.'
 Assert-True (-not (Test-CodexShortcutReplaceable -Shortcut $missingShortcut)) 'Missing shortcuts should not be replaceable.'
 Assert-True (-not (Test-CodexShortcutReplaceable -Shortcut $codexFolderOnlyShortcut)) 'A parent folder named Codex should not make an unrelated shortcut replaceable.'
+
+$backupPathBody = (Get-Command -Name Get-StableShortcutBackupPath -CommandType Function).ScriptBlock.ToString()
+Assert-True ($backupPathBody.Contains('try {')) 'Stable shortcut backup hashing should wrap SHA256 use in try/finally.'
+Assert-True ($backupPathBody.Contains('$sha.Dispose()')) 'Stable shortcut backup hashing should dispose the SHA256 instance.'
 
 $backup = New-CodexShortcutBackupRecord -Shortcut $fakeCodexShortcut -BackupPath 'C:\Backup\abc.lnk' -Kind 'StartMenu'
 Assert-Equal $fakeCodexShortcut.Path $backup.OriginalPath 'Backup metadata should record original path.'
@@ -177,9 +182,16 @@ $remoteTarget = [pscustomobject]@{
     title = 'Example'
     webSocketDebuggerUrl = 'ws://127.0.0.1:18317/devtools/page/3'
 }
+$codexTitledRemoteTarget = [pscustomobject]@{
+    type = 'page'
+    url = 'https://docs.example.com/'
+    title = 'Codex Documentation'
+    webSocketDebuggerUrl = 'ws://127.0.0.1:18317/devtools/page/4'
+}
 Assert-True (Test-CodexDevToolsTarget -Target $pageTarget) 'Codex app page targets should be accepted.'
 Assert-True (-not (Test-CodexDevToolsTarget -Target $devtoolsTarget)) 'Non-page DevTools targets should be rejected.'
 Assert-True (-not (Test-CodexDevToolsTarget -Target $remoteTarget)) 'Unrelated web page targets should be rejected.'
+Assert-True (-not (Test-CodexDevToolsTarget -Target $codexTitledRemoteTarget)) 'Non-app pages should be rejected even when their title contains Codex.'
 
 $payload = Get-CodexRtlPayload
 Assert-True ($payload.Contains('window.__AI_RTL_FIX_CODEX')) 'Payload should be idempotent.'
@@ -196,5 +208,9 @@ Assert-True ($payload.Contains('MutationObserver')) 'Payload should reapply afte
 $cdpBody = (Get-Command -Name Invoke-CodexRtlInjectionForTarget -CommandType Function).ScriptBlock.ToString()
 Assert-True ($cdpBody.Contains('Page.addScriptToEvaluateOnNewDocument')) 'Injection should install the payload for future documents.'
 Assert-True ($cdpBody.Contains('Runtime.evaluate')) 'Injection should also evaluate the payload in the current document.'
+
+$cdpCommandBody = (Get-Command -Name Invoke-CodexCdpCommand -CommandType Function).ScriptBlock.ToString()
+Assert-True ($cdpCommandBody.Contains('while (-not $result.EndOfMessage)')) 'CDP command responses should keep reading until EndOfMessage.'
+Assert-True ($cdpCommandBody.Contains('WebSocketMessageType]::Close')) 'CDP command responses should reject close frames while reading.'
 
 Write-Host 'codex-runtime-rtl.tests.ps1 passed'
