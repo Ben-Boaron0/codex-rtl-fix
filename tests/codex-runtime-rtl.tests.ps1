@@ -160,6 +160,75 @@ try {
     }
 }
 
+$tmpRestoreRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-restore-test-{0}" -f ([guid]::NewGuid()))
+New-Item -ItemType Directory -Force -Path $tmpRestoreRoot | Out-Null
+$oldLocalAppData = $env:LOCALAPPDATA
+try {
+    $env:LOCALAPPDATA = Join-Path $tmpRestoreRoot 'LocalAppData'
+
+    $launcherScriptPath = Get-CodexRtlLauncherScriptPath
+    $launcherScriptDir = Split-Path -Parent $launcherScriptPath
+    New-Item -ItemType Directory -Force -Path $launcherScriptDir | Out-Null
+    Set-Content -LiteralPath $launcherScriptPath -Value 'launcher' -Encoding ASCII
+
+    $ownedShortcutPath = Join-Path $tmpRestoreRoot 'Desktop\Codex RTL Fix.lnk'
+    $ownedShortcutDir = Split-Path -Parent $ownedShortcutPath
+    New-Item -ItemType Directory -Force -Path $ownedShortcutDir | Out-Null
+    $ownedShortcutSpec = New-CodexLauncherShortcutSpec -Inspection ([pscustomobject]@{
+        InstallLocation = $tmpRestoreRoot
+        AppExe = Join-Path $tmpRestoreRoot 'Codex.exe'
+    })
+    New-CodexLauncherShortcut -ShortcutPath $ownedShortcutPath -Spec $ownedShortcutSpec
+
+    $backupRoot = Join-Path $tmpRestoreRoot 'backups'
+    New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+
+    $goodBackupPath = Join-Path $backupRoot 'good.lnk'
+    Set-Content -LiteralPath $goodBackupPath -Value 'original good shortcut bytes' -Encoding ASCII
+    $goodOriginalPath = Join-Path $tmpRestoreRoot 'Restored\Codex.lnk'
+
+    $badBackupPath = Join-Path $backupRoot 'bad.lnk'
+    Set-Content -LiteralPath $badBackupPath -Value 'original bad shortcut bytes' -Encoding ASCII
+    $badParentPath = Join-Path $tmpRestoreRoot 'blocked-parent'
+    Set-Content -LiteralPath $badParentPath -Value 'not a directory' -Encoding ASCII
+    $badOriginalPath = Join-Path $badParentPath 'Codex.lnk'
+
+    $state = [pscustomobject]@{
+        Version = 1
+        Port = 18317
+        PackageVersion = '1.2.3'
+        InstallLocation = $tmpRestoreRoot
+        AppExe = Join-Path $tmpRestoreRoot 'Codex.exe'
+        RuntimeRoot = Get-AiRtlRuntimeRoot
+        LauncherScriptPath = $launcherScriptPath
+        ShortcutBackups = @(
+            [pscustomobject]@{
+                OriginalPath = $goodOriginalPath
+                BackupPath = $goodBackupPath
+            },
+            [pscustomobject]@{
+                OriginalPath = $badOriginalPath
+                BackupPath = $badBackupPath
+            }
+        )
+        OwnedArtifacts = @($ownedShortcutPath)
+        UpdatedAt = [DateTimeOffset]::Now.ToString('o')
+    }
+    Save-CodexRtlState -State $state
+
+    Restore-CodexRtlPatch
+
+    Assert-Equal 'original good shortcut bytes' (Get-Content -LiteralPath $goodOriginalPath -Raw).Trim() 'Restore patch should restore backups that can be copied successfully.'
+    Assert-True (-not (Test-Path -LiteralPath $ownedShortcutPath)) 'Restore patch should still remove owned shortcuts after one backup restore fails.'
+    Assert-True (-not (Test-Path -LiteralPath $launcherScriptPath)) 'Restore patch should still remove the launcher script after one backup restore fails.'
+    Assert-True (-not (Test-Path -LiteralPath (Get-CodexRtlStatePath))) 'Restore patch should still remove the state file after one backup restore fails.'
+} finally {
+    $env:LOCALAPPDATA = $oldLocalAppData
+    if (Test-Path -LiteralPath $tmpRestoreRoot) {
+        Remove-Item -LiteralPath $tmpRestoreRoot -Recurse -Force
+    }
+}
+
 $args = New-CodexRtlLaunchArguments -Port 18317
 Assert-True ($args -contains '--remote-debugging-port=18317') 'Launch args should enable CDP on the chosen port.'
 Assert-True ($args -contains '--remote-debugging-address=127.0.0.1') 'Launch args should bind CDP to loopback only.'

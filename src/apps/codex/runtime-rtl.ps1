@@ -339,12 +339,16 @@ function Restore-CodexShortcutBackups {
             Write-Warn "Codex shortcut backup missing: $($backup.BackupPath)"
             continue
         }
-        $targetDir = Split-Path -Parent $backup.OriginalPath
-        if (-not (Test-Path -LiteralPath $targetDir)) {
-            New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+        try {
+            $targetDir = Split-Path -Parent $backup.OriginalPath
+            if (-not (Test-Path -LiteralPath $targetDir)) {
+                New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+            }
+            Copy-Item -LiteralPath $backup.BackupPath -Destination $backup.OriginalPath -Force
+            $restored += $backup
+        } catch {
+            Write-Warn "Codex shortcut restore failed for $($backup.OriginalPath): $($_.Exception.Message)"
         }
-        Copy-Item -LiteralPath $backup.BackupPath -Destination $backup.OriginalPath -Force
-        $restored += $backup
     }
     $restored
 }
