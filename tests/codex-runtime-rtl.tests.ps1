@@ -34,6 +34,38 @@ Assert-True ((Get-AiRtlRuntimeRoot).EndsWith('AI RTL Fix\runtime')) 'Runtime roo
 Assert-True (-not [bool](Get-Command -Name Get-CodexRtlWatcherTaskName -CommandType Function -ErrorAction SilentlyContinue)) 'Codex runtime patch should not expose watcher task helpers.'
 Assert-True (-not [bool](Get-Command -Name Start-CodexRtlWatcher -CommandType Function -ErrorAction SilentlyContinue)) 'Codex runtime patch should not expose a background watcher.'
 
+$tmpRuntimeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-runtime-copy-test-{0}" -f ([guid]::NewGuid()))
+New-Item -ItemType Directory -Force -Path $tmpRuntimeRoot | Out-Null
+$oldLocalAppData = $env:LOCALAPPDATA
+try {
+    $env:LOCALAPPDATA = Join-Path $tmpRuntimeRoot 'LocalAppData'
+    $runtimeRoot = Install-AiRtlRuntimeFiles -SourceRoot $repoRoot
+    $requiredRuntimeFiles = @(
+        'patch.ps1',
+        'src/core/logging.ps1',
+        'src/core/detection.ps1',
+        'src/core/prompting.ps1',
+        'src/core/asar.ps1',
+        'src/apps/claude/payload.ps1',
+        'src/apps/claude/state.ps1',
+        'src/apps/claude/detection.ps1',
+        'src/apps/codex/detection.ps1',
+        'src/apps/codex/inspection.ps1',
+        'src/apps/codex/rtl-payload.ps1',
+        'src/apps/codex/runtime-rtl.ps1',
+        'src/apps/claude/patching.ps1',
+        'src/ui/menu.ps1'
+    )
+    foreach ($requiredRuntimeFile in $requiredRuntimeFiles) {
+        Assert-True (Test-Path -LiteralPath (Join-Path $runtimeRoot $requiredRuntimeFile)) "Runtime copy should include '$requiredRuntimeFile'."
+    }
+} finally {
+    $env:LOCALAPPDATA = $oldLocalAppData
+    if (Test-Path -LiteralPath $tmpRuntimeRoot) {
+        Remove-Item -LiteralPath $tmpRuntimeRoot -Recurse -Force
+    }
+}
+
 $state = New-CodexRtlState -Inspection ([pscustomobject]@{
     PackageVersion = '1.2.3'
     InstallLocation = 'C:\Program Files\WindowsApps\OpenAI.Codex_fake'
