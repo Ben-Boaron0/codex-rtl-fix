@@ -4,6 +4,18 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $patchScript = Join-Path $repoRoot 'patch.ps1'
 . $patchScript -SkipMain
 
+$script:Output = @()
+
+function Write-Host {
+    param(
+        [Parameter(Position = 0, ValueFromRemainingArguments = $true)]$Object,
+        [ConsoleColor]$ForegroundColor
+    )
+    if ($null -ne $Object) {
+        $script:Output += (($Object | ForEach-Object { "$_" }) -join ' ')
+    }
+}
+
 function Assert-True {
     param([bool]$Condition, [string]$Message)
     if (-not $Condition) { throw $Message }
@@ -36,8 +48,7 @@ Assert-Equal 1 $state.Version 'Codex RTL state should have an explicit manifest 
 Assert-True ($state.RuntimeRoot.EndsWith('AI RTL Fix\runtime')) 'Codex RTL state should persist the runtime root.'
 Assert-True ($state.LauncherScriptPath.EndsWith('AI RTL Fix\runtime\launch-codex-rtl.vbs')) 'Codex RTL state should persist the launcher script path.'
 Assert-Equal 1 @($state.OwnedArtifacts).Count 'Codex RTL state should track owned artifacts explicitly.'
-Assert-Equal 'C:\Users\Test\Desktop\Codex.lnk' $state.OwnedArtifacts[0] 'Owned artifacts should include replaced shortcut paths.'
-Assert-True (-not [bool](Get-Command -Name Install-CodexRtlShortcut -CommandType Function -ErrorAction SilentlyContinue)) 'Patch should not create a duplicate Start Menu launcher shortcut.'
+Assert-Equal 'C:\Users\Test\Desktop\Codex.lnk' $state.OwnedArtifacts[0] 'Owned artifacts should include tracked shortcut paths.'
 
 $launcherScript = New-CodexRtlLauncherScriptContent -PatchScriptPath (Join-Path (Get-AiRtlRuntimeRoot) 'patch.ps1')
 Assert-True ($launcherScript.Contains('powershell.exe')) 'VBS launcher should run PowerShell internally.'
@@ -65,7 +76,8 @@ $fakeInspectionFallback = [pscustomobject]@{
 }
 Assert-Equal "$($fakeInspectionFallback.AppExe),0" (Get-CodexIconLocation -Inspection $fakeInspectionFallback) 'Icon location should fall back to Codex.exe,0 before shell icons.'
 $installBody = (Get-Command -Name Install-CodexRtlPatch -CommandType Function).ScriptBlock.ToString()
-Assert-True (-not ($installBody -match 'Install-CodexRtlShortcut')) 'Patch flow should not install a canonical Start Menu shortcut.'
+Assert-True ($installBody.Contains('OwnedArtifacts')) 'Patch flow should persist owned artifacts explicitly.'
+Assert-True ($installBody.Contains('Codex RTL')) 'Patch flow should create sibling Codex RTL shortcuts.'
 Assert-True ($installBody.Contains('OwnedArtifacts')) 'Patch flow should persist owned artifacts explicitly.'
 $launchBody = (Get-Command -Name Launch-CodexRtl -CommandType Function).ScriptBlock.ToString()
 Assert-True (-not ($launchBody.Contains('Start-CodexWithRtlActivation'))) 'Codex launch should use the known-working direct executable path.'
@@ -114,29 +126,25 @@ $codexFolderOnlyShortcut = [pscustomobject]@{
     TargetPath = 'C:\Windows\notepad.exe'
     Arguments = ''
 }
-Assert-True (Test-CodexShortcutReplaceable -Shortcut $fakeCodexShortcut) 'Writable Codex lnk shortcuts should be replaceable.'
-Assert-True (-not (Test-CodexShortcutReplaceable -Shortcut $ambiguousShortcut)) 'Ambiguous non-Codex shortcuts should not be replaceable.'
-Assert-True (-not (Test-CodexShortcutReplaceable -Shortcut $missingShortcut)) 'Missing shortcuts should not be replaceable.'
-Assert-True (-not (Test-CodexShortcutReplaceable -Shortcut $codexFolderOnlyShortcut)) 'A parent folder named Codex should not make an unrelated shortcut replaceable.'
-
-$backupPathBody = (Get-Command -Name Get-StableShortcutBackupPath -CommandType Function).ScriptBlock.ToString()
-Assert-True ($backupPathBody.Contains('try {')) 'Stable shortcut backup hashing should wrap SHA256 use in try/finally.'
-Assert-True ($backupPathBody.Contains('$sha.Dispose()')) 'Stable shortcut backup hashing should dispose the SHA256 instance.'
-
-$backup = New-CodexShortcutBackupRecord -Shortcut $fakeCodexShortcut -BackupPath 'C:\Backup\abc.lnk' -Kind 'StartMenu'
-Assert-Equal $fakeCodexShortcut.Path $backup.OriginalPath 'Backup metadata should record original path.'
-Assert-Equal 'C:\Backup\abc.lnk' $backup.BackupPath 'Backup metadata should record backup path.'
-Assert-Equal $fakeCodexShortcut.TargetPath $backup.OriginalTargetPath 'Backup metadata should record original target.'
+Assert-True (Test-CodexShortcutCandidate -Shortcut $fakeCodexShortcut) 'Writable Codex lnk shortcuts should be recognized as Codex shortcut candidates.'
+Assert-True (-not (Test-CodexShortcutCandidate -Shortcut $ambiguousShortcut)) 'Ambiguous non-Codex shortcuts should not be recognized as Codex shortcut candidates.'
+Assert-True (Test-CodexShortcutSeedable -Shortcut $fakeCodexShortcut) 'Writable Codex lnk shortcuts should seed sibling Codex RTL shortcuts.'
+Assert-True (-not (Test-CodexShortcutSeedable -Shortcut $ambiguousShortcut)) 'Ambiguous non-Codex shortcuts should not seed sibling Codex RTL shortcuts.'
+Assert-True (-not (Test-CodexShortcutSeedable -Shortcut $missingShortcut)) 'Missing shortcuts should not seed sibling Codex RTL shortcuts.'
+Assert-True (-not (Test-CodexShortcutSeedable -Shortcut $codexFolderOnlyShortcut)) 'A parent folder named Codex should not make an unrelated shortcut seedable.'
+Assert-Equal 'C:\Users\Test\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Codex RTL.lnk' (Get-CodexSiblingRtlShortcutPath -ShortcutPath $fakeCodexShortcut.Path) 'Sibling Codex RTL path should be derived next to the source shortcut.'
+Assert-Equal 'C:\Users\Test\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OpenAI\Codex RTL.lnk' (Get-CodexSiblingRtlShortcutPath -ShortcutPath 'C:\Users\Test\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OpenAI\Codex.lnk') 'Sibling Codex RTL path should stay inside nested Start Menu folders.'
+Assert-Equal (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Codex RTL.lnk') (Get-CodexRtlShortcutPath) 'Canonical user Start Menu Codex RTL path should target the user Programs folder.'
 
 $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-shortcut-test-{0}" -f ([guid]::NewGuid()))
 New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
 $oldLocalAppData = $env:LOCALAPPDATA
 try {
     $env:LOCALAPPDATA = Join-Path $tmpRoot 'LocalAppData'
-    $shortcutPath = Join-Path $tmpRoot 'Codex.lnk'
-    Set-Content -LiteralPath $shortcutPath -Value 'original shortcut bytes' -Encoding ASCII
+    $sourceShortcutPath = Join-Path $tmpRoot 'Codex.lnk'
+    Set-Content -LiteralPath $sourceShortcutPath -Value 'original shortcut bytes' -Encoding ASCII
     $realShortcut = [pscustomobject]@{
-        Path = $shortcutPath
+        Path = $sourceShortcutPath
         Name = 'Codex.lnk'
         Exists = $true
         IsLink = $true
@@ -144,15 +152,36 @@ try {
         TargetPath = 'C:\Program Files\WindowsApps\OpenAI.Codex_fake\app\Codex.exe'
         Arguments = ''
     }
-    $realBackup = Backup-CodexShortcut -Shortcut $realShortcut
-    Set-Content -LiteralPath $shortcutPath -Value 'replacement shortcut bytes' -Encoding ASCII
-    $restored = @(Restore-CodexShortcutBackups -Backups @($realBackup))
-    Assert-Equal 1 $restored.Count 'Restore should report one restored backup.'
-    Assert-Equal 'original shortcut bytes' (Get-Content -LiteralPath $shortcutPath -Raw).Trim() 'Restore should put the original shortcut bytes back.'
-    $unrelatedPath = Join-Path $tmpRoot 'Other.lnk'
-    Set-Content -LiteralPath $unrelatedPath -Value 'unrelated' -Encoding ASCII
-    Restore-CodexShortcutBackups -Backups @($realBackup) | Out-Null
-    Assert-Equal 'unrelated' (Get-Content -LiteralPath $unrelatedPath -Raw).Trim() 'Restore should not touch unrelated shortcuts.'
+    $rtlShortcutPath = Get-CodexSiblingRtlShortcutPath -ShortcutPath $sourceShortcutPath
+    $realSpec = New-CodexLauncherShortcutSpec -Inspection ([pscustomobject]@{
+        InstallLocation = $tmpRoot
+        AppExe = Join-Path $tmpRoot 'Codex.exe'
+    })
+    New-CodexParallelRtlShortcut -SourceShortcut $realShortcut -Spec $realSpec | Out-Null
+    Assert-True (Test-Path -LiteralPath $rtlShortcutPath) 'Parallel Codex RTL shortcut should be created next to the source shortcut.'
+    Assert-Equal 'original shortcut bytes' (Get-Content -LiteralPath $sourceShortcutPath -Raw).Trim() 'Creating a parallel Codex RTL shortcut should not modify the original Codex shortcut.'
+    Assert-True (Test-CodexRtlOwnedShortcut -ShortcutPath $rtlShortcutPath) 'Created sibling Codex RTL shortcut should be AI RTL Fix-owned.'
+
+    New-CodexParallelRtlShortcut -SourceShortcut $realShortcut -Spec $realSpec | Out-Null
+    Assert-True (Test-Path -LiteralPath $rtlShortcutPath) 'Re-running patch should refresh an existing owned Codex RTL shortcut in place.'
+
+    $foreignRoot = Join-Path $tmpRoot 'foreign'
+    New-Item -ItemType Directory -Force -Path $foreignRoot | Out-Null
+    $foreignSourceShortcutPath = Join-Path $foreignRoot 'Codex.lnk'
+    Set-Content -LiteralPath $foreignSourceShortcutPath -Value 'foreign shortcut bytes' -Encoding ASCII
+    $foreignRtlShortcutPath = Get-CodexSiblingRtlShortcutPath -ShortcutPath $foreignSourceShortcutPath
+    Set-Content -LiteralPath $foreignRtlShortcutPath -Value 'not-owned' -Encoding ASCII
+    $foreignShortcut = [pscustomobject]@{
+        Path = $foreignSourceShortcutPath
+        Name = 'Codex.lnk'
+        Exists = $true
+        IsLink = $true
+        IsWritable = $true
+        TargetPath = 'C:\Program Files\WindowsApps\OpenAI.Codex_fake\app\Codex.exe'
+        Arguments = ''
+    }
+    Assert-True (-not (Install-CodexParallelRtlShortcutIfPossible -SourceShortcut $foreignShortcut -Spec $realSpec)) 'Patch should not overwrite a non-owned sibling Codex RTL shortcut.'
+    Assert-Equal 'not-owned' (Get-Content -LiteralPath $foreignRtlShortcutPath -Raw).Trim() 'Patch should leave a non-owned sibling Codex RTL shortcut untouched.'
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
     if (Test-Path -LiteralPath $tmpRoot) {
@@ -160,18 +189,99 @@ try {
     }
 }
 
+$tmpInstallRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-install-test-{0}" -f ([guid]::NewGuid()))
+New-Item -ItemType Directory -Force -Path $tmpInstallRoot | Out-Null
+$oldLocalAppData = $env:LOCALAPPDATA
+$oldAppData = $env:APPDATA
+$oldProgramData = $env:ProgramData
+$oldUserProfile = $env:USERPROFILE
+$oldPublic = $env:PUBLIC
+try {
+    $env:LOCALAPPDATA = Join-Path $tmpInstallRoot 'LocalAppData'
+    $env:APPDATA = Join-Path $tmpInstallRoot 'AppData\Roaming'
+    $env:ProgramData = Join-Path $tmpInstallRoot 'ProgramData'
+    $env:USERPROFILE = Join-Path $tmpInstallRoot 'UserProfile'
+    $env:PUBLIC = Join-Path $tmpInstallRoot 'Public'
+    $script:Output = @()
+    $script:StartedProcesses = @()
+    $script:MockCodexProcesses = @()
+
+    $fakeInstallRoot = Join-Path $tmpInstallRoot 'WindowsApps\OpenAI.Codex_fake'
+    $fakeAppExe = Join-Path $fakeInstallRoot 'app\Codex.exe'
+    $fakeIcon = Join-Path $fakeInstallRoot 'app\resources\icon.ico'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $fakeAppExe) | Out-Null
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $fakeIcon) | Out-Null
+    Set-Content -LiteralPath $fakeAppExe -Value 'exe' -Encoding ASCII
+    Set-Content -LiteralPath $fakeIcon -Value 'ico' -Encoding ASCII
+
+    New-Item -ItemType Directory -Force -Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs') | Out-Null
+
+    function Get-CodexInstallInspection {
+        [pscustomobject]@{
+            PackageFound = $true
+            PackageVersion = '1.2.3'
+            InstallLocation = $fakeInstallRoot
+            AppExe = $fakeAppExe
+        }
+    }
+    function Install-AiRtlRuntimeFiles { param([string]$SourceRoot) return (Get-AiRtlRuntimeRoot) }
+    function Get-CodexShortcutInventory { @() }
+    function Remove-CodexRtlLegacyWatcherTask {}
+    function Read-CodexRtlState { $null }
+    function Save-CodexRtlState { param($State) $script:SavedState = $State }
+    function Start-CodexForRtl {
+        param($Inspection, [int]$Port, [switch]$AllowRestart)
+        $script:StartedProcesses += 'rtl'
+        'started'
+    }
+    function Invoke-CodexRtlInjection { param([int]$Port) $true }
+
+    Install-CodexRtlPatch
+
+    $fallbackStartMenuShortcut = Get-CodexRtlShortcutPath
+    Assert-True (Test-Path -LiteralPath $fallbackStartMenuShortcut) 'Patch should always create a user Start Menu Codex RTL shortcut even when no seedable Codex shortcut exists there.'
+    Assert-True (Test-CodexRtlOwnedShortcut -ShortcutPath $fallbackStartMenuShortcut) 'Fallback user Start Menu Codex RTL shortcut should be AI RTL Fix-owned.'
+    Assert-True (@($script:SavedState.OwnedArtifacts) -contains $fallbackStartMenuShortcut) 'Saved state should track the fallback user Start Menu Codex RTL shortcut.'
+    Assert-True (($script:Output -join "`n") -match 'Created or refreshed 1 Codex RTL shortcut') 'Patch wording should count the fallback Start Menu Codex RTL shortcut creation.'
+} finally {
+    $env:LOCALAPPDATA = $oldLocalAppData
+    $env:APPDATA = $oldAppData
+    $env:ProgramData = $oldProgramData
+    $env:USERPROFILE = $oldUserProfile
+    $env:PUBLIC = $oldPublic
+    if (Test-Path -LiteralPath $tmpInstallRoot) {
+        Remove-Item -LiteralPath $tmpInstallRoot -Recurse -Force
+    }
+}
+
+. $patchScript -SkipMain
+
 $tmpRestoreRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-restore-test-{0}" -f ([guid]::NewGuid()))
 New-Item -ItemType Directory -Force -Path $tmpRestoreRoot | Out-Null
 $oldLocalAppData = $env:LOCALAPPDATA
 try {
     $env:LOCALAPPDATA = Join-Path $tmpRestoreRoot 'LocalAppData'
+    $script:Output = @()
+    $script:StartedProcesses = @()
+    $script:MockCodexProcesses = @(
+        [pscustomobject]@{
+            ProcessId = 321
+            ExecutablePath = Join-Path $tmpRestoreRoot 'Codex.exe'
+            CommandLine = '"C:\Fake\Codex.exe" --remote-debugging-port=18317 --remote-debugging-address=127.0.0.1'
+        }
+    )
 
     $launcherScriptPath = Get-CodexRtlLauncherScriptPath
     $launcherScriptDir = Split-Path -Parent $launcherScriptPath
     New-Item -ItemType Directory -Force -Path $launcherScriptDir | Out-Null
     Set-Content -LiteralPath $launcherScriptPath -Value 'launcher' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $tmpRestoreRoot 'Codex.exe') -Value 'exe' -Encoding ASCII
 
-    $ownedShortcutPath = Join-Path $tmpRestoreRoot 'Desktop\Codex RTL Fix.lnk'
+    $originalShortcutPath = Join-Path $tmpRestoreRoot 'Desktop\Codex.lnk'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $originalShortcutPath) | Out-Null
+    Set-Content -LiteralPath $originalShortcutPath -Value 'original codex shortcut bytes' -Encoding ASCII
+
+    $ownedShortcutPath = Join-Path $tmpRestoreRoot 'Desktop\Codex RTL.lnk'
     $ownedShortcutDir = Split-Path -Parent $ownedShortcutPath
     New-Item -ItemType Directory -Force -Path $ownedShortcutDir | Out-Null
     $ownedShortcutSpec = New-CodexLauncherShortcutSpec -Inspection ([pscustomobject]@{
@@ -179,6 +289,21 @@ try {
         AppExe = Join-Path $tmpRestoreRoot 'Codex.exe'
     })
     New-CodexLauncherShortcut -ShortcutPath $ownedShortcutPath -Spec $ownedShortcutSpec
+
+    function Get-CodexDesktopProcesses { @($script:MockCodexProcesses) }
+    function Stop-CodexDesktopProcesses { $script:MockCodexProcesses = @() }
+    function Start-Process {
+        param(
+            [string]$FilePath,
+            [object[]]$ArgumentList,
+            [string]$WorkingDirectory
+        )
+        $script:StartedProcesses += [pscustomobject]@{
+            FilePath = $FilePath
+            ArgumentList = @($ArgumentList)
+            WorkingDirectory = $WorkingDirectory
+        }
+    }
 
     $backupRoot = Join-Path $tmpRestoreRoot 'backups'
     New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
@@ -218,14 +343,87 @@ try {
 
     Restore-CodexRtlPatch
 
+    Assert-Equal 'original codex shortcut bytes' (Get-Content -LiteralPath $originalShortcutPath -Raw).Trim() 'Restore patch should leave the original Codex shortcut untouched.'
     Assert-Equal 'original good shortcut bytes' (Get-Content -LiteralPath $goodOriginalPath -Raw).Trim() 'Restore patch should restore backups that can be copied successfully.'
     Assert-True (-not (Test-Path -LiteralPath $ownedShortcutPath)) 'Restore patch should still remove owned shortcuts after one backup restore fails.'
     Assert-True (-not (Test-Path -LiteralPath $launcherScriptPath)) 'Restore patch should still remove the launcher script after one backup restore fails.'
     Assert-True (-not (Test-Path -LiteralPath (Get-CodexRtlStatePath))) 'Restore patch should still remove the state file after one backup restore fails.'
+    Assert-Equal 1 @($script:StartedProcesses).Count 'Restore should restart Codex normally when the patched RTL session is currently running.'
+    Assert-Equal (Join-Path $tmpRestoreRoot 'Codex.exe') $script:StartedProcesses[0].FilePath 'Restore restart should use the normal Codex executable path.'
+    Assert-Equal 0 @($script:StartedProcesses[0].ArgumentList).Count 'Restore restart should not reuse RTL debug arguments.'
+    Assert-True (($script:Output -join "`n") -match 'restarted Codex in normal mode') 'Restore wording should mention that Codex was restarted in normal mode after removing the RTL runtime patch.'
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
     if (Test-Path -LiteralPath $tmpRestoreRoot) {
         Remove-Item -LiteralPath $tmpRestoreRoot -Recurse -Force
+    }
+}
+
+$tmpRestoreNoRestartRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-restore-no-restart-test-{0}" -f ([guid]::NewGuid()))
+New-Item -ItemType Directory -Force -Path $tmpRestoreNoRestartRoot | Out-Null
+$oldLocalAppData = $env:LOCALAPPDATA
+try {
+    $env:LOCALAPPDATA = Join-Path $tmpRestoreNoRestartRoot 'LocalAppData'
+    $script:Output = @()
+    $script:StartedProcesses = @()
+    $script:MockCodexProcesses = @(
+        [pscustomobject]@{
+            ProcessId = 654
+            ExecutablePath = Join-Path $tmpRestoreNoRestartRoot 'Codex.exe'
+            CommandLine = '"C:\Fake\Codex.exe"'
+        }
+    )
+
+    $launcherScriptPath = Get-CodexRtlLauncherScriptPath
+    $launcherScriptDir = Split-Path -Parent $launcherScriptPath
+    New-Item -ItemType Directory -Force -Path $launcherScriptDir | Out-Null
+    Set-Content -LiteralPath $launcherScriptPath -Value 'launcher' -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $tmpRestoreNoRestartRoot 'Codex.exe') -Value 'exe' -Encoding ASCII
+
+    $ownedShortcutPath = Join-Path $tmpRestoreNoRestartRoot 'Desktop\Codex RTL.lnk'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ownedShortcutPath) | Out-Null
+    $ownedShortcutSpec = New-CodexLauncherShortcutSpec -Inspection ([pscustomobject]@{
+        InstallLocation = $tmpRestoreNoRestartRoot
+        AppExe = Join-Path $tmpRestoreNoRestartRoot 'Codex.exe'
+    })
+    New-CodexLauncherShortcut -ShortcutPath $ownedShortcutPath -Spec $ownedShortcutSpec
+
+    function Get-CodexDesktopProcesses { @($script:MockCodexProcesses) }
+    function Stop-CodexDesktopProcesses { $script:MockCodexProcesses = @() }
+    function Start-Process {
+        param(
+            [string]$FilePath,
+            [object[]]$ArgumentList,
+            [string]$WorkingDirectory
+        )
+        $script:StartedProcesses += [pscustomobject]@{
+            FilePath = $FilePath
+            ArgumentList = @($ArgumentList)
+            WorkingDirectory = $WorkingDirectory
+        }
+    }
+
+    Save-CodexRtlState -State ([pscustomobject]@{
+        Version = 1
+        Port = 18317
+        PackageVersion = '1.2.3'
+        InstallLocation = $tmpRestoreNoRestartRoot
+        AppExe = Join-Path $tmpRestoreNoRestartRoot 'Codex.exe'
+        RuntimeRoot = Get-AiRtlRuntimeRoot
+        LauncherScriptPath = $launcherScriptPath
+        ShortcutBackups = @()
+        OwnedArtifacts = @($ownedShortcutPath)
+        UpdatedAt = [DateTimeOffset]::Now.ToString('o')
+    })
+
+    Restore-CodexRtlPatch
+
+    Assert-Equal 0 @($script:StartedProcesses).Count 'Restore should not restart Codex when the current session is not the RTL-patched one.'
+    Assert-True (($script:Output -join "`n") -match 'Restart Codex normally if it is still open') 'Restore wording should explain the manual normal restart when no patched RTL session was restarted automatically.'
+} finally {
+    $env:LOCALAPPDATA = $oldLocalAppData
+    if (Test-Path -LiteralPath $tmpRestoreNoRestartRoot) {
+        Remove-Item -LiteralPath $tmpRestoreNoRestartRoot -Recurse -Force
     }
 }
 

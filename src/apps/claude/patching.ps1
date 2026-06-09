@@ -1163,8 +1163,7 @@ function Install-Patch {
         }
 
         if (-not $Auto) {
-            $autoPatchPrompt = Read-Host "Do you want to enable Auto Re-Patch after each Claude update? (Y/n)"
-            if ($autoPatchPrompt -ne 'n' -and $autoPatchPrompt -ne 'N') {
+            if (Read-YesNoPrompt -Prompt "Do you want to enable Auto Re-Patch after each Claude update? (y/n)") {
                 try { Install-AutoUpdateTask } catch { Write-Warn "Failed to install auto-patch task: $($_.Exception.Message)" }
             }
         } else {
