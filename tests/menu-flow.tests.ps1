@@ -137,13 +137,12 @@ function Read-Host {
     return $script:MenuInputs.Dequeue()
 }
 Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
-Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Codex patch should execute after invalid confirmation inputs are retried and then answered with y.'
-Assert-Equal 3 @($script:Prompts | Where-Object { $_ -match 'continue' }).Count 'Invalid confirmation inputs should re-prompt until a valid y/n answer is entered.'
+Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Codex patch should treat Enter as yes for the confirmation prompt.'
+Assert-Equal 1 @($script:Prompts | Where-Object { $_ -match 'continue' }).Count 'Empty confirmation input should not re-prompt when yes is the default.'
 
 Reset-TestState
 $script:MenuInputs = [System.Collections.Generic.Queue[string]]::new()
 $script:MenuInputs.Enqueue('')
-$script:MenuInputs.Enqueue('n')
 function Read-Host {
     param([string]$Prompt)
     if ($Prompt) { $script:Prompts += $Prompt }
@@ -151,8 +150,8 @@ function Read-Host {
     return $script:MenuInputs.Dequeue()
 }
 Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @((New-TestApp -Id 'claude' -Name 'Claude Desktop'))
-Assert-Equal 0 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Claude patch should not treat Enter as implicit yes.'
-Assert-Equal 2 @($script:Prompts | Where-Object { $_ -match 'continue' }).Count 'Empty confirmation input should re-prompt before accepting n cancellation.'
+Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Claude patch should treat Enter as implicit yes.'
+Assert-Equal 1 @($script:Prompts | Where-Object { $_ -match 'continue' }).Count 'Empty confirmation input should not re-prompt before dispatch.'
 function Read-Host { param([string]$Prompt) return '' }
 
 Reset-TestState

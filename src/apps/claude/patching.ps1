@@ -971,8 +971,6 @@ function Install-Patch {
     foreach ($orphan in @("$AsarPath.bak.tmp", "$ExePath.bak.tmp", "$CoworkSvcPath.bak.tmp")) {
         if (Test-Path -LiteralPath $orphan) { Remove-Item -LiteralPath $orphan -Force -ErrorAction SilentlyContinue }
     }
-    Wait-FileUnlock -Path $ExePath -TimeoutSeconds 15 -Access Read
-    Wait-FileUnlock -Path $CoworkSvcPath -TimeoutSeconds 15 -Access Read
     if (-not (Test-Path "$AsarPath.bak"))      { Copy-FileSafe $AsarPath      "$AsarPath.bak"      'asar'; Write-Success "app.asar.bak created" }
     if (-not (Test-Path "$ExePath.bak") -and (Test-Path $ExePath))             { Copy-FileSafe $ExePath        "$ExePath.bak"        'pe';   Write-Success "claude.exe.bak created" }
     if (-not (Test-Path "$CoworkSvcPath.bak") -and (Test-Path $CoworkSvcPath)) { Copy-FileSafe $CoworkSvcPath  "$CoworkSvcPath.bak"  'pe';   Write-Success "cowork-svc.exe.bak created" }
@@ -1039,6 +1037,7 @@ function Install-Patch {
 
             $SkipEntirely = @(
                 'index.js',
+                'index.pre.js',
                 'directMcpHost.js',
                 'nodeHost.js',
                 'shellPathWorker.js',
@@ -1047,6 +1046,8 @@ function Install-Patch {
             $JsFiles = Get-ChildItem -Path $BuildDir -Filter "*.js" -Recurse
             $Injected = 0
             $MainInjected = 0
+            $MainSeen = $false
+            $MainAlreadyPatched = $false
             $utf8NoBom = New-Object System.Text.UTF8Encoding $false
             foreach ($file in $JsFiles) {
                 if (($SkipEntirely -contains $file.Name) -and $file.Name -ne $MainEntryFile) {
@@ -1056,7 +1057,11 @@ function Install-Patch {
                 $content = [System.IO.File]::ReadAllText($file.FullName, [System.Text.Encoding]::UTF8)
 
                 if ($file.Name -eq $MainEntryFile) {
-                    if ($content -match "CLAUDE RTL MAIN PATCH START") { continue }
+                    $MainSeen = $true
+                    if ($content -match "CLAUDE RTL MAIN PATCH START") {
+                        $MainAlreadyPatched = $true
+                        continue
+                    }
                     $strictRe = '^\s*("use strict"|''use strict'')\s*;'
                     if ($content -match $strictRe) {
                         $prologue = $matches[0]
@@ -1081,7 +1086,8 @@ function Install-Patch {
                 Write-Log "Injected RTL into: $($file.Name)"
             }
             if ($MainInjected -gt 0) { Write-Success "Injected main-process UI-direction switch into $MainInjected file(s)." }
-            else { Write-Warn "Main-process entry '$MainEntryFile' not found or already patched." }
+            elseif ($MainAlreadyPatched) { Write-Log "Main-process entry '$MainEntryFile' already patched." }
+            elseif (-not $MainSeen) { Write-Warn "Main-process entry '$MainEntryFile' not found." }
             if ($Injected -gt 0) { Write-Success "Injected RTL JS logic into $Injected file(s)." }
             else { Write-Warn "Renderer JS files already patched or not found." }
         }
@@ -1344,7 +1350,7 @@ function Install-Patch {
         }
 
         if (-not $Auto) {
-            if (Read-YesNoPrompt -Prompt "Do you want to enable Auto Re-Patch after each Claude update? (y/n)") {
+            if (Read-YesNoPrompt -Prompt "Do you want to enable Auto Re-Patch after each Claude update? (Y/n)") {
                 try { Install-AutoUpdateTask } catch { Write-Warn "Failed to install auto-patch task: $($_.Exception.Message)" }
             }
         } else {

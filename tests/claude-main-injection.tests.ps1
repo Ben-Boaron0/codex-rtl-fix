@@ -32,8 +32,11 @@ Assert-True ($patchingSource -match 'node --check') 'ASAR patching should syntax
 foreach ($name in @('index.js', 'directMcpHost.js', 'nodeHost.js', 'shellPathWorker.js', 'transcriptSearchWorker.js')) {
     Assert-True ($patchingSource.Contains("'$name'")) "Non-renderer skip list should contain $name."
 }
+Assert-True ($patchingSource -match '\$SkipEntirely = @\([\s\S]*''index\.pre\.js''[\s\S]*\)') 'Non-renderer skip list should contain index.pre.js when it is not the resolved main entry.'
 Assert-True ($patchingSource -match '\$content -match "CLAUDE RTL MAIN PATCH START"') 'Main entry should be idempotently patched.'
 Assert-True ($patchingSource -match '\$strictRe') 'Main entry injection should preserve a leading use-strict directive.'
 Assert-True ($patchingSource -match '\$file\.Name -ne \$MainEntryFile') 'Resolved main entry should not be skipped even if its filename appears in the non-renderer skip list.'
+Assert-True ($patchingSource -match '\$MainSeen') 'Main entry reporting should track whether the main entry was found.'
+Assert-True ($patchingSource -match '\$MainAlreadyPatched') 'Main entry reporting should distinguish already-patched entries from missing entries.'
 
 Write-Host 'claude-main-injection.tests.ps1 passed'

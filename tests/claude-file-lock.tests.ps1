@@ -17,6 +17,10 @@ function Assert-False {
 Assert-True ([bool](Get-Command -Name Test-FileLock -CommandType Function -ErrorAction SilentlyContinue)) 'Test-FileLock should load.'
 Assert-True ([bool](Get-Command -Name Wait-FileUnlock -CommandType Function -ErrorAction SilentlyContinue)) 'Wait-FileUnlock should load.'
 
+$patchingSource = Get-Content (Join-Path $repoRoot 'src\apps\claude\patching.ps1') -Raw
+Assert-False ($patchingSource -match 'Wait-FileUnlock -Path \$ExePath -TimeoutSeconds 15 -Access Read') 'Backup phase should not keep a redundant read-access wait after write preflight.'
+Assert-False ($patchingSource -match 'Wait-FileUnlock -Path \$CoworkSvcPath -TimeoutSeconds 15 -Access Read') 'Backup phase should not keep a redundant read-access service wait after write preflight.'
+
 $invalidAccessThrew = $false
 try {
     Test-FileLock -Path (Join-Path ([System.IO.Path]::GetTempPath()) 'missing-ai-rtl-file.tmp') -Access Execute | Out-Null

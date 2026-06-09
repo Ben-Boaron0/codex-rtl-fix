@@ -196,7 +196,7 @@ function Invoke-SelectedAppAction {
         )
 
         Write-Host "`nWARNING: $Warning" -ForegroundColor Yellow
-        if (-not (Read-YesNoPrompt -Prompt "Do you want to continue? (y/n)")) {
+        if (-not (Read-YesNoPrompt -Prompt "Do you want to continue? (Y/n)")) {
             Write-Host "Operation cancelled."
             return
         }

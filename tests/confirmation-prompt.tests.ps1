@@ -28,17 +28,20 @@ function Read-Host {
 }
 
 $script:Inputs.Enqueue('')
+Assert-True (Read-YesNoPrompt -Prompt 'Do you want to continue? (Y/n)') 'Read-YesNoPrompt should treat Enter as yes for Y/n prompts.'
+Assert-Equal 1 $script:Prompts.Count 'Read-YesNoPrompt should not re-prompt after Enter when yes is the default.'
+Assert-Equal 0 (@($script:Prompts | Where-Object { $_ -notmatch '\(Y/n\)' }).Count) 'Read-YesNoPrompt should preserve Y/n prompt wording.'
+
+$script:Prompts = @()
+$script:Inputs = [System.Collections.Generic.Queue[string]]::new()
 $script:Inputs.Enqueue('maybe')
 $script:Inputs.Enqueue('Y')
-Assert-True (Read-YesNoPrompt -Prompt 'Do you want to continue? (y/n)') 'Read-YesNoPrompt should accept uppercase Y after retrying invalid input.'
-Assert-Equal 3 $script:Prompts.Count 'Read-YesNoPrompt should keep prompting until a valid answer is entered.'
-Assert-Equal 0 (@($script:Prompts | Where-Object { $_ -notmatch '\(y/n\)' }).Count) 'Read-YesNoPrompt should preserve lowercase y/n prompt wording on retries.'
+Assert-True (Read-YesNoPrompt -Prompt 'Do you want to continue? (Y/n)') 'Read-YesNoPrompt should accept uppercase Y after retrying invalid input.'
+Assert-Equal 2 $script:Prompts.Count 'Read-YesNoPrompt should keep prompting after invalid input until a valid answer is entered.'
 
 $script:Prompts = @()
 $script:Inputs = [System.Collections.Generic.Queue[string]]::new()
 $script:Inputs.Enqueue('')
-$script:Inputs.Enqueue('n')
-Assert-True (-not (Read-YesNoPrompt -Prompt 'Do you want to enable Auto Re-Patch after each Claude update? (y/n)')) 'Read-YesNoPrompt should return false after empty input is retried and n is entered.'
-Assert-Equal 2 $script:Prompts.Count 'Read-YesNoPrompt should re-prompt after empty input before accepting n.'
+Assert-True (Read-YesNoPrompt -Prompt 'Do you want to enable Auto Re-Patch after each Claude update? (Y/n)') 'Read-YesNoPrompt should use yes as the default for auto-repatch prompts.'
 
 Write-Host 'confirmation-prompt.tests.ps1 passed'
