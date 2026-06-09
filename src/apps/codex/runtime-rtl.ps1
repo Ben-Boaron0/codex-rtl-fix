@@ -78,6 +78,7 @@ function Install-AiRtlRuntimeFiles {
         'patch.ps1',
         'src/core/logging.ps1',
         'src/core/detection.ps1',
+        'src/core/prompting.ps1',
         'src/core/asar.ps1',
         'src/apps/claude/payload.ps1',
         'src/apps/claude/state.ps1',
