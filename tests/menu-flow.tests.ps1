@@ -168,8 +168,9 @@ Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @(
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Claude patch should dispatch once with mixed selection.'
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Mixed patch should dispatch Codex runtime RTL once.'
 
-$chatGpt = New-TestApp -Id 'chatgpt' -Name 'ChatGPT Desktop' -Found:$false -SupportStatus 'Planned' -Selected:$false
-Assert-True (-not (Test-AppMenuSelectable -App $chatGpt)) 'ChatGPT should not be selectable.'
+$detectedAppNames = @(Get-DetectedApps | ForEach-Object { $_.Name })
+Assert-Equal 2 $detectedAppNames.Count 'Detected app list should include exactly the active app targets.'
+Assert-True (-not [bool]($detectedAppNames | Where-Object { $_ -notin @('Claude Desktop', 'Codex Desktop') })) 'Detected app list should only include active app targets.'
 
 Reset-TestState
 $script:MenuInputs = [System.Collections.Generic.Queue[string]]::new()

@@ -12,7 +12,6 @@ RTL/LTR text rendering.
 
 - Claude Desktop patching is imported from the original Claude Desktop RTL Patch.
 - Codex Desktop runtime RTL patching is available without modifying the Store package.
-- ChatGPT Desktop support is planned after Codex runtime validation.
 - The verified `irm | iex` installer flow uses an AI RTL Fix signing key.
 
 ## What It Does Today
@@ -57,7 +56,6 @@ AI RTL Fix
 Select target apps:
   1. [ ] Claude Desktop: Found
   2. [ ] Codex Desktop: Found
-  3. [ ] ChatGPT Desktop: Not found (planned)
 
 Toggle app number, A for all supported, C to continue, Q to exit
 
@@ -104,9 +102,9 @@ its packaged JavaScript and handles Claude-specific integrity checks:
 6. Updates Claude's service certificate expectations.
 7. Stores backups so the original state can be restored.
 
-Codex and ChatGPT may require different app-specific patch strategies. AI RTL
-Fix treats each app as its own adapter rather than assuming Claude's exact
-integrity model applies everywhere.
+Codex requires a different app-specific patch strategy. AI RTL Fix treats each
+app as its own adapter rather than assuming Claude's exact integrity model
+applies everywhere.
 
 ## Codex Runtime RTL Patch
 

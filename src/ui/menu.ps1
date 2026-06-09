@@ -6,7 +6,6 @@ function Get-AppMenuId {
 
     if ($Name -like 'Claude*') { return 'claude' }
     if ($Name -like 'Codex*') { return 'codex' }
-    if ($Name -like 'ChatGPT*') { return 'chatgpt' }
     return ($Name -replace '\s+', '-').ToLowerInvariant()
 }
 
