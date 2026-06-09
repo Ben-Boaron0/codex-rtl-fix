@@ -40,14 +40,15 @@
     Write-Success "Processes and services halted."
 }
 
-function Test-FileLock([string]$Path) {
+function Test-FileLock([string]$Path, [string]$Access = 'Write') {
     <#
     .SYNOPSIS
-        Returns $true if the file is locked by another process, $false if writable.
+        Returns $true if the file cannot be opened for the requested access.
     #>
+    if ($Access -notin @('Read', 'Write')) { throw "Unsupported file access probe: $Access" }
     if (-not (Test-Path $Path)) { return $false }
     try {
-        $fs = [System.IO.File]::Open($Path, 'Open', 'ReadWrite', 'None')
+        $fs = [System.IO.File]::Open($Path, 'Open', $Access, 'Read')
         $fs.Close()
         return $false
     } catch {
@@ -55,14 +56,14 @@ function Test-FileLock([string]$Path) {
     }
 }
 
-function Wait-FileUnlock([string]$Path, [int]$TimeoutSeconds = 20) {
+function Wait-FileUnlock([string]$Path, [int]$TimeoutSeconds = 20, [string]$Access = 'Write') {
     <#
     .SYNOPSIS
-        Waits until a file is no longer locked, or throws after timeout.
+        Waits until a file is openable for the requested access.
     #>
     if (-not (Test-Path $Path)) { return }
     for ($w = 0; $w -lt $TimeoutSeconds; $w++) {
-        if (-not (Test-FileLock $Path)) {
+        if (-not (Test-FileLock $Path $Access)) {
             Write-Log "File unlocked: $(Split-Path $Path -Leaf)"
             return
         }
@@ -87,6 +88,154 @@ function Get-FileHolders([string]$Path) {
         }
         return ($holders | Select-Object -Unique)
     } catch { return @() }
+}
+
+$script:RmLockTypeLoaded = $false
+function Initialize-RmLockType {
+    if ($script:RmLockTypeLoaded) { return $true }
+    try {
+        Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+public static class RmLock {
+    [StructLayout(LayoutKind.Sequential)]
+    struct RM_UNIQUE_PROCESS { public int dwProcessId; public System.Runtime.InteropServices.ComTypes.FILETIME ProcessStartTime; }
+    const int CCH_RM_MAX_APP_NAME = 255;
+    const int CCH_RM_MAX_SVC_NAME = 63;
+    enum RM_APP_TYPE { RmUnknownApp=0, RmMainWindow=1, RmOtherWindow=2, RmService=3, RmExplorer=4, RmConsole=5, RmCritical=1000 }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct RM_PROCESS_INFO {
+        public RM_UNIQUE_PROCESS Process;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = CCH_RM_MAX_APP_NAME + 1)] public string strAppName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = CCH_RM_MAX_SVC_NAME + 1)] public string strServiceShortName;
+        public RM_APP_TYPE ApplicationType;
+        public uint AppStatus;
+        public uint TSSessionId;
+        [MarshalAs(UnmanagedType.Bool)] public bool bRestartable;
+    }
+    [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
+    static extern int RmStartSession(out uint pSessionHandle, int dwSessionFlags, string strSessionKey);
+    [DllImport("rstrtmgr.dll")]
+    static extern int RmEndSession(uint pSessionHandle);
+    [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
+    static extern int RmRegisterResources(uint pSessionHandle, uint nFiles, string[] rgsFilenames, uint nApplications, [In] RM_UNIQUE_PROCESS[] rgApplications, uint nServices, string[] rgsServiceNames);
+    [DllImport("rstrtmgr.dll")]
+    static extern int RmGetList(uint dwSessionHandle, out uint pnProcInfoNeeded, ref uint pnProcInfo, [In, Out] RM_PROCESS_INFO[] rgAffectedApps, ref uint lpdwRebootReasons);
+    public static List<string> GetLockers(string path) {
+        var result = new List<string>();
+        uint handle; string key = Guid.NewGuid().ToString();
+        int res = RmStartSession(out handle, 0, key);
+        if (res != 0) throw new Exception("RmStartSession failed: " + res);
+        try {
+            string[] resources = new string[] { path };
+            res = RmRegisterResources(handle, (uint)resources.Length, resources, 0, null, 0, null);
+            if (res != 0) throw new Exception("RmRegisterResources failed: " + res);
+            uint needed = 0, count = 0, reason = 0;
+            res = RmGetList(handle, out needed, ref count, null, ref reason);
+            if (res == 234) {
+                var info = new RM_PROCESS_INFO[needed];
+                count = needed;
+                res = RmGetList(handle, out needed, ref count, info, ref reason);
+                if (res != 0) throw new Exception("RmGetList(2) failed: " + res);
+                for (int i = 0; i < count; i++)
+                    result.Add(info[i].strAppName + " (PID " + info[i].Process.dwProcessId + ", type " + info[i].ApplicationType + ")");
+            } else if (res != 0) {
+                throw new Exception("RmGetList(1) failed: " + res);
+            }
+        } finally { RmEndSession(handle); }
+        return result;
+    }
+}
+'@
+        $script:RmLockTypeLoaded = $true
+        return $true
+    } catch {
+        if ("$($_.Exception.Message)" -match 'already') { $script:RmLockTypeLoaded = $true; return $true }
+        Write-Log "Restart Manager unavailable: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Get-FileLockers([string]$Path) {
+    try {
+        if (-not (Initialize-RmLockType)) { return @() }
+        if (-not (Test-Path -LiteralPath $Path)) { return @() }
+        return [RmLock]::GetLockers($Path)
+    } catch {
+        return @()
+    }
+}
+
+function Get-FileWriteStatus([string]$Path) {
+    $name = Split-Path $Path -Leaf
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return [pscustomobject]@{ Path = $Path; Name = $name; Status = 'MISSING'; Holders = @() }
+    }
+    try {
+        $fs = [System.IO.File]::Open($Path, 'Open', 'Write', 'Read')
+        $fs.Close()
+        return [pscustomobject]@{ Path = $Path; Name = $name; Status = 'OK'; Holders = @() }
+    } catch [System.UnauthorizedAccessException] {
+        return [pscustomobject]@{ Path = $Path; Name = $name; Status = 'DENIED'; Holders = (Get-FileLockers $Path) }
+    } catch {
+        return [pscustomobject]@{ Path = $Path; Name = $name; Status = 'LOCKED'; Holders = (Get-FileLockers $Path) }
+    }
+}
+
+function Assert-PatchWritable {
+    param(
+        [Parameter(Mandatory)][string[]]$WriteTargets,
+        [string[]]$DirTargets = @(),
+        [int]$TimeoutSeconds = 15
+    )
+
+    Write-Step "Preflight: verifying patch targets are writable..."
+    $blocked = @()
+    foreach ($target in $WriteTargets) {
+        if (-not (Test-Path -LiteralPath $target)) { continue }
+        $unlocked = $false
+        for ($w = 0; $w -lt $TimeoutSeconds; $w++) {
+            if (-not (Test-FileLock -Path $target -Access Write)) { $unlocked = $true; break }
+            if ($w -eq 0) { Write-Log "Preflight waiting on $(Split-Path $target -Leaf)..." }
+            Start-Sleep -Seconds 1
+        }
+        if ($unlocked) {
+            Write-Success "Writable: $(Split-Path $target -Leaf)"
+        } else {
+            $blocked += Get-FileWriteStatus -Path $target
+        }
+    }
+
+    foreach ($dir in $DirTargets) {
+        try {
+            if (-not (Test-Path -LiteralPath $dir)) { continue }
+            $probe = Join-Path $dir ("ai-rtl-preflight-{0}.tmp" -f ([guid]::NewGuid().ToString('N')))
+            [System.IO.File]::WriteAllText($probe, 'x')
+            Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+        } catch {
+            Write-Warn "Directory may not be writable (continuing): $dir -- $($_.Exception.Message)"
+        }
+    }
+
+    if ($blocked.Count -gt 0) {
+        $lines = foreach ($item in $blocked) {
+            $holders = if ($item.Holders -and $item.Holders.Count -gt 0) { " -- held by: " + ($item.Holders -join '; ') } else { "" }
+            "    [$($item.Status)] $($item.Name)$holders"
+        }
+        throw @"
+Preflight failed -- the patch stopped before modifying files.
+These file(s) are not writable right now:
+$($lines -join "`n")
+
+How to fix:
+  * Reboot and, without opening Claude, run the patch again.
+  * Temporarily disable real-time antivirus, then re-run.
+  * If it persists, reinstall Claude: Get-AppxPackage *Claude* | Remove-AppxPackage
+"@
+    }
+
+    Write-Success "Preflight passed -- all patch targets are writable."
 }
 
 function Test-FileValid([string]$Path, [string]$Type) {
@@ -813,13 +962,15 @@ function Install-Patch {
     Take-Ownership $AppDir
     Take-Ownership $ResourcesDir
 
+    Assert-PatchWritable -WriteTargets @($AsarPath, $ExePath, $CoworkSvcPath) `
+                         -DirTargets @($ResourcesDir, $AppDir) `
+                         -TimeoutSeconds 15
+
     Write-Step "Creating secure backups..."
     # Clean up any orphan .bak.tmp files left by a previously interrupted run.
     foreach ($orphan in @("$AsarPath.bak.tmp", "$ExePath.bak.tmp", "$CoworkSvcPath.bak.tmp")) {
         if (Test-Path -LiteralPath $orphan) { Remove-Item -LiteralPath $orphan -Force -ErrorAction SilentlyContinue }
     }
-    Wait-FileUnlock -Path $ExePath -TimeoutSeconds 15
-    Wait-FileUnlock -Path $CoworkSvcPath -TimeoutSeconds 15
     if (-not (Test-Path "$AsarPath.bak"))      { Copy-FileSafe $AsarPath      "$AsarPath.bak"      'asar'; Write-Success "app.asar.bak created" }
     if (-not (Test-Path "$ExePath.bak") -and (Test-Path $ExePath))             { Copy-FileSafe $ExePath        "$ExePath.bak"        'pe';   Write-Success "claude.exe.bak created" }
     if (-not (Test-Path "$CoworkSvcPath.bak") -and (Test-Path $CoworkSvcPath)) { Copy-FileSafe $CoworkSvcPath  "$CoworkSvcPath.bak"  'pe';   Write-Success "cowork-svc.exe.bak created" }
@@ -872,37 +1023,73 @@ function Install-Patch {
 
         $BuildDir = Join-Path $global:TmpDir ".vite\build"
         if (Test-Path $BuildDir) {
-            # Files that run OUTSIDE the renderer (main process / MCP host / Node workers).
-            # They have no DOM, so the renderer-only RTL snippet is a guarded no-op there;
-            # injecting into them gives no benefit and risks interfering with MCP server
-            # startup (issue #14). index.js is the main-process bundle that SPAWNS the MCP
-            # hosts. Skip them entirely; RTL still works via the window preload scripts.
-            $SkipNonRenderer = @(
-                'index.js',                 # .vite/build/index.js         - main process entry
-                'index.pre.js',             # .vite/build/index.pre.js     - main process bootstrap
-                'directMcpHost.js',         # .vite/build/mcp-runtime/...  - Node MCP host
-                'nodeHost.js',              # .vite/build/mcp-runtime/...  - Node host
-                'shellPathWorker.js',       # .vite/build/shell-path-worker/...
-                'transcriptSearchWorker.js' # .vite/build/transcript-search-worker/...
+            $MainEntryFile = 'index.pre.js'
+            $PkgJsonPath = Join-Path $global:TmpDir 'package.json'
+            if (Test-Path -LiteralPath $PkgJsonPath) {
+                try {
+                    $pkgMain = (Get-Content $PkgJsonPath -Raw | ConvertFrom-Json).main
+                    if ($pkgMain) { $MainEntryFile = Split-Path $pkgMain -Leaf }
+                } catch {
+                    Write-Log "Could not parse package.json main; defaulting to $MainEntryFile."
+                }
+            }
+            Write-Log "Main-process entry: $MainEntryFile"
+
+            $SkipEntirely = @(
+                'index.js',
+                'index.pre.js',
+                'directMcpHost.js',
+                'nodeHost.js',
+                'shellPathWorker.js',
+                'transcriptSearchWorker.js'
             )
             $JsFiles = Get-ChildItem -Path $BuildDir -Filter "*.js" -Recurse
             $Injected = 0
+            $MainInjected = 0
+            $MainSeen = $false
+            $MainAlreadyPatched = $false
+            $utf8NoBom = New-Object System.Text.UTF8Encoding $false
             foreach ($file in $JsFiles) {
-                if ($SkipNonRenderer -contains $file.Name) {
+                if (($SkipEntirely -contains $file.Name) -and $file.Name -ne $MainEntryFile) {
                     Write-Log "Skipped non-renderer file (no DOM): $($file.Name)"
                     continue
                 }
                 $content = [System.IO.File]::ReadAllText($file.FullName, [System.Text.Encoding]::UTF8)
-                if ($content -match "CLAUDE RTL PATCH START") { continue }
 
+                if ($file.Name -eq $MainEntryFile) {
+                    $MainSeen = $true
+                    if ($content -match "CLAUDE RTL MAIN PATCH START") {
+                        $MainAlreadyPatched = $true
+                        continue
+                    }
+                    $strictRe = '^\s*("use strict"|''use strict'')\s*;'
+                    if ($content -match $strictRe) {
+                        $prologue = $matches[0]
+                        $newContent = $prologue + "`n" + $MAIN_INJECTION_CODE + "`n" + $content.Substring($prologue.Length)
+                    } else {
+                        $newContent = $MAIN_INJECTION_CODE + "`n" + $content
+                    }
+                    [System.IO.File]::WriteAllText($file.FullName, $newContent, $utf8NoBom)
+                    cmd.exe /c "node --check `"$($file.FullName)`""
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "node --check failed on patched main entry '$($file.Name)'. Refusing to repack."
+                    }
+                    $MainInjected++
+                    Write-Log "Injected MAIN switch into: $($file.Name)"
+                    continue
+                }
+
+                if ($content -match "CLAUDE RTL PATCH START") { continue }
                 $newContent = $RTL_INJECTION_CODE + "`n" + $content
-                $utf8NoBom = New-Object System.Text.UTF8Encoding $false
                 [System.IO.File]::WriteAllText($file.FullName, $newContent, $utf8NoBom)
                 $Injected++
                 Write-Log "Injected RTL into: $($file.Name)"
             }
+            if ($MainInjected -gt 0) { Write-Success "Injected main-process UI-direction switch into $MainInjected file(s)." }
+            elseif ($MainAlreadyPatched) { Write-Log "Main-process entry '$MainEntryFile' already patched." }
+            elseif (-not $MainSeen) { Write-Warn "Main-process entry '$MainEntryFile' not found." }
             if ($Injected -gt 0) { Write-Success "Injected RTL JS logic into $Injected file(s)." }
-            else { Write-Warn "JS files already patched or not found." }
+            else { Write-Warn "Renderer JS files already patched or not found." }
         }
 
         $TmpAsarPath = "$AsarPath.new"
@@ -1163,7 +1350,7 @@ function Install-Patch {
         }
 
         if (-not $Auto) {
-            if (Read-YesNoPrompt -Prompt "Do you want to enable Auto Re-Patch after each Claude update? (y/n)") {
+            if (Read-YesNoPrompt -Prompt "Do you want to enable Auto Re-Patch after each Claude update? (Y/n)") {
                 try { Install-AutoUpdateTask } catch { Write-Warn "Failed to install auto-patch task: $($_.Exception.Message)" }
             }
         } else {

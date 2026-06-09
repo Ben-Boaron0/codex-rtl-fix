@@ -27,6 +27,7 @@ $signRelease = Get-Content (Join-Path $repoRoot 'tools\sign-release.ps1') -Raw
 $stateModule = Get-Content (Join-Path $repoRoot 'src\apps\claude\state.ps1') -Raw
 $patchingModule = Get-Content (Join-Path $repoRoot 'src\apps\claude\patching.ps1') -Raw
 $readme = Get-Content (Join-Path $repoRoot 'README.md') -Raw
+$diagPath = Join-Path $repoRoot 'tools\claude-lock-diag.ps1'
 
 $expectedRepoBase = 'https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main'
 
@@ -43,6 +44,11 @@ foreach ($activeContent in @($install, $patch, $stateModule, $patchingModule)) {
 }
 
 Assert-True (Test-Path -LiteralPath (Join-Path $repoRoot 'tools\new-signing-key.ps1')) 'tools/new-signing-key.ps1 should exist.'
+Assert-True (Test-Path -LiteralPath $diagPath) 'tools/claude-lock-diag.ps1 should exist.'
+
+$diag = Get-Content $diagPath -Raw
+Assert-Match $diag 'AI RTL Fix' 'Claude lock diagnostic should use AI RTL Fix branding.'
+Assert-NotMatch $diag 'Please attach that file to GitHub issue #15' 'Diagnostic should not include upstream issue-upload instructions.'
 
 $verify = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot 'tools\verify-signature.ps1') 2>&1
 if ($LASTEXITCODE -ne 0) {
