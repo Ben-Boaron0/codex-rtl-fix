@@ -4,6 +4,18 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $patchScript = Join-Path $repoRoot 'patch.ps1'
 . $patchScript -SkipMain
 
+$script:Output = @()
+
+function Write-Host {
+    param(
+        [Parameter(Position = 0, ValueFromRemainingArguments = $true)]$Object,
+        [ConsoleColor]$ForegroundColor
+    )
+    if ($null -ne $Object) {
+        $script:Output += (($Object | ForEach-Object { "$_" }) -join ' ')
+    }
+}
+
 function New-TestAsar {
     param(
         [Parameter(Mandatory)][string]$Path,
@@ -77,10 +89,40 @@ try {
     Assert-True (@($analysis.RendererScripts) -contains 'webview/assets/index-test.js') 'Renderer script should be listed.'
     Assert-True (@($analysis.RendererStyles) -contains 'webview/assets/app-main-test.css') 'Renderer stylesheet should be listed.'
 
-    $recommendation = Get-CodexPhaseTwoRecommendation -Inspection $analysis
-    Assert-True ($recommendation -match 'runtime CDP injection') 'Recommendation should choose runtime CDP injection.'
     Assert-True (Test-CspAllowsExternalSelfScript '<meta http-equiv="Content-Security-Policy" content="script-src ''self'' ''wasm-unsafe-eval''; style-src ''self'' ''unsafe-inline''">') 'CSP parser should allow quoted self in double-quoted content attributes.'
     Assert-True (Test-CspAllowsExternalSelfScript '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;">') 'CSP parser should decode HTML entities before checking script-src.'
+
+    function Get-CodexInstallInspection {
+        [pscustomobject]@{
+            PackageFound = $true
+            PackageName = 'OpenAI.Codex'
+            PackageVersion = '1.2.3'
+            InstallLocation = 'C:\Fake\OpenAI.Codex'
+            AppExe = 'C:\Fake\OpenAI.Codex\app\Codex.exe'
+            AsarPath = $tmp
+            AsarInspection = $analysis
+        }
+    }
+    function Get-CodexHashEmbeddingReport {
+        param([Parameter(Mandatory)]$Inspection)
+        [pscustomobject]@{
+            HeaderSha256 = 'header'
+            FullAsarSha256 = 'full'
+            Targets = @(
+                [pscustomobject]@{
+                    Name = 'Codex.exe'
+                    Exists = $true
+                    HeaderHashFound = $false
+                    FullAsarHashFound = $false
+                }
+            )
+        }
+    }
+
+    $script:Output = @()
+    Show-CodexInspection
+    Assert-True (-not (($script:Output -join "`n") -match 'Recommendation:')) 'Inspection output should not include a Recommendation section.'
+    Assert-True (-not (($script:Output -join "`n") -match 'runtime CDP injection')) 'Inspection output should not print the old phase-two recommendation text.'
 
     Write-Host 'codex-inspection.tests.ps1 passed'
 } finally {

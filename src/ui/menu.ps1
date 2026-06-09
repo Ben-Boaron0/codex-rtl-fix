@@ -197,8 +197,7 @@ function Invoke-SelectedAppAction {
         )
 
         Write-Host "`nWARNING: $Warning" -ForegroundColor Yellow
-        $confirm = Read-Host "Do you want to continue? (Y/n)"
-        if ($confirm -eq 'n' -or $confirm -eq 'N') {
+        if (-not (Read-YesNoPrompt -Prompt "Do you want to continue? (y/n)")) {
             Write-Host "Operation cancelled."
             return
         }

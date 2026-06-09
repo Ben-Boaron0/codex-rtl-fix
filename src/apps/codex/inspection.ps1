@@ -138,27 +138,6 @@ function Get-CodexHashEmbeddingReport {
     }
 }
 
-function Get-CodexPhaseTwoRecommendation {
-    param([Parameter(Mandatory)]$Inspection)
-
-    if (-not $Inspection.AsarExists) {
-        return 'Do not patch yet: app.asar was not found.'
-    }
-    if ($Inspection.Error) {
-        return "Do not patch yet: ASAR inspection failed ($($Inspection.Error))."
-    }
-    if (-not $Inspection.IndexHtmlFound) {
-        return 'Do not patch yet: webview/index.html was not found.'
-    }
-    if (-not $Inspection.ExternalScriptInjectionAllowed) {
-        return 'Do not use simple external JS injection yet: Content-Security-Policy does not allow same-origin scripts.'
-    }
-    if (-not $Inspection.CandidateInjectionPointFound) {
-        return 'Do not patch yet: renderer assets were not found next to webview/index.html.'
-    }
-    return 'Phase two should use runtime CDP injection so Codex Store package files are not modified.'
-}
-
 function Show-CodexInspection {
     Write-Host "`nCodex Desktop inspection (read-only)" -ForegroundColor Cyan
     Write-Host "No files will be modified, no processes will be started, and no scheduled tasks will be changed." -ForegroundColor DarkGray
@@ -216,7 +195,5 @@ function Show-CodexInspection {
         Write-Host "  Hash probe failed: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 
-    Write-Host "`nRecommendation:" -ForegroundColor White
-    Write-Host "  $(Get-CodexPhaseTwoRecommendation -Inspection $asar)" -ForegroundColor Cyan
 }
 

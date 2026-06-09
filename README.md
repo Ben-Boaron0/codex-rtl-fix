@@ -43,11 +43,13 @@ irm https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main/install.ps1 | 
 ## Menu
 
 The menu is app-first: select target apps, then choose an action available for
-that selection. Codex patching installs a stable per-user runtime and replaces
-only normal writable Codex `.lnk` shortcuts that already exist. It does not add
-a duplicate Start Menu shortcut, modify Codex package files, Store app identity
-entries, taskbar registry data, Start layout policy, or install a Codex
-background watcher.
+that selection. Codex patching installs a stable per-user runtime and creates
+parallel `Codex RTL` shortcuts in normal writable user-facing locations where a
+writable Codex `.lnk` shortcut already exists, and also creates a per-user
+Start Menu `Codex RTL` shortcut so it appears in the Windows app list even when
+the Microsoft Store Codex entry is not backed by a normal writable `.lnk`. It
+does not modify Codex package files, Store app identity entries, taskbar
+registry data, Start layout policy, or install a Codex background watcher.
 
 ```text
 AI RTL Fix
@@ -111,11 +113,13 @@ integrity model applies everywhere.
 Codex Desktop is installed as a Microsoft Store package, so AI RTL Fix does not
 edit `app.asar`, binaries, signatures, or files under `WindowsApps`. Instead,
 the Codex patch installs a persistent runtime under `%LOCALAPPDATA%\AI RTL Fix`.
-It backs up and replaces normal writable Codex `.lnk` shortcuts in approved
-user-facing locations, without creating a duplicate Start Menu shortcut next to
-the Microsoft Store Codex entry. Replaced shortcuts point to a small
-`wscript.exe` launcher so Codex can be started without a persistent visible
-PowerShell window.
+It creates sibling `Codex RTL` shortcuts next to normal writable Codex `.lnk`
+shortcuts in approved user-facing locations. It also creates a per-user Start
+Menu `Codex RTL` shortcut so users can find it in the Windows Start menu even
+when the Store-installed Codex entry comes from app registration rather than a
+filesystem shortcut. The original `Codex` shortcuts stay untouched, and the AI
+RTL Fix-created `Codex RTL` shortcuts point to a small `wscript.exe` launcher
+so Codex can be started without a persistent visible PowerShell window.
 
 The launcher starts Codex directly from its installed `app\Codex.exe` with a
 local Chromium DevTools Protocol port bound to `127.0.0.1`. This direct launch
@@ -153,9 +157,10 @@ The installed runtime files are stored at:
 Windows Store app identity entries such as `OpenAI.Codex_...!App` are reported
 but not rewritten. If Windows exposes no writable Codex shortcut for a launch
 path, AI RTL Fix will not try to force that surface. Restore removes AI RTL
-Fix-created Codex shortcuts from earlier builds only when they are recognized as
-AI RTL Fix launchers, restores backed-up `.lnk` files byte-for-byte, and also
-cleans up the legacy `Codex RTL` shortcut name from earlier builds.
+Fix-created `Codex RTL` shortcuts when they are recognized as AI RTL Fix
+launchers. For users patched under earlier builds that replaced shortcuts in
+place, restore also restores backed-up `.lnk` files byte-for-byte and cleans up
+legacy `Codex RTL` shortcut artifacts from earlier builds.
 
 ## Codex Inspection
 

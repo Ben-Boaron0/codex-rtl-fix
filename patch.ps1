@@ -77,6 +77,7 @@ $moduleRoot = Join-Path $PSScriptRoot 'src'
 $modules = @(
     'core/logging.ps1',
     'core/detection.ps1',
+    'core/prompting.ps1',
     'core/asar.ps1',
     'apps/claude/payload.ps1',
     'apps/claude/state.ps1',
