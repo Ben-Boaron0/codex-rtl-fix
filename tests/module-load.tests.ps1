@@ -21,6 +21,10 @@ foreach ($moduleDir in $expectedModuleDirs) {
 
 $expectedFunctions = @(
     'Find-ClaudeDir',
+    'Initialize-RmLockType',
+    'Get-FileLockers',
+    'Get-FileWriteStatus',
+    'Assert-PatchWritable',
     'Install-Patch',
     'Restore-Patch',
     'Install-AutoUpdateTask',
