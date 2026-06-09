@@ -804,10 +804,14 @@ function Restore-CodexRtlPatch {
             (Get-CodexRtlLegacyShortcutPath)
         )
     }
+    $removedOwnedShortcutCount = 0
     foreach ($ownedArtifact in $ownedArtifacts) {
+        $existedBeforeRemoval = Test-Path -LiteralPath $ownedArtifact
         Remove-CodexRtlOwnedShortcut -ShortcutPath $ownedArtifact | Out-Null
+        if ($existedBeforeRemoval -and (-not (Test-Path -LiteralPath $ownedArtifact))) {
+            $removedOwnedShortcutCount += 1
+        }
     }
-    $removedOwnedShortcutCount = @($ownedArtifacts | Where-Object { -not (Test-Path -LiteralPath $_) }).Count
 
     $launcherScriptPath = if ($state -and $state.LauncherScriptPath) { $state.LauncherScriptPath } else { Get-CodexRtlLauncherScriptPath }
     if ($launcherScriptPath -and (Test-Path -LiteralPath $launcherScriptPath)) {

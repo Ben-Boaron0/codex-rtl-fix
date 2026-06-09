@@ -78,7 +78,6 @@ Assert-Equal "$($fakeInspectionFallback.AppExe),0" (Get-CodexIconLocation -Inspe
 $installBody = (Get-Command -Name Install-CodexRtlPatch -CommandType Function).ScriptBlock.ToString()
 Assert-True ($installBody.Contains('OwnedArtifacts')) 'Patch flow should persist owned artifacts explicitly.'
 Assert-True ($installBody.Contains('Codex RTL')) 'Patch flow should create sibling Codex RTL shortcuts.'
-Assert-True ($installBody.Contains('OwnedArtifacts')) 'Patch flow should persist owned artifacts explicitly.'
 $launchBody = (Get-Command -Name Launch-CodexRtl -CommandType Function).ScriptBlock.ToString()
 Assert-True (-not ($launchBody.Contains('Start-CodexWithRtlActivation'))) 'Codex launch should use the known-working direct executable path.'
 Assert-True ($launchBody.Contains('Start-CodexForRtl')) 'Codex launch should delegate to the approved-verb launch helper.'
@@ -424,6 +423,50 @@ try {
     $env:LOCALAPPDATA = $oldLocalAppData
     if (Test-Path -LiteralPath $tmpRestoreNoRestartRoot) {
         Remove-Item -LiteralPath $tmpRestoreNoRestartRoot -Recurse -Force
+    }
+}
+
+$tmpRestoreLegacyFallbackRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-restore-legacy-fallback-test-{0}" -f ([guid]::NewGuid()))
+New-Item -ItemType Directory -Force -Path $tmpRestoreLegacyFallbackRoot | Out-Null
+$oldLocalAppData = $env:LOCALAPPDATA
+$oldAppData = $env:APPDATA
+try {
+    $env:LOCALAPPDATA = Join-Path $tmpRestoreLegacyFallbackRoot 'LocalAppData'
+    $env:APPDATA = Join-Path $tmpRestoreLegacyFallbackRoot 'AppData\Roaming'
+    $script:Output = @()
+    $script:StartedProcesses = @()
+    $script:MockCodexProcesses = @()
+
+    $launcherScriptPath = Get-CodexRtlLauncherScriptPath
+    $launcherScriptDir = Split-Path -Parent $launcherScriptPath
+    New-Item -ItemType Directory -Force -Path $launcherScriptDir | Out-Null
+    Set-Content -LiteralPath $launcherScriptPath -Value 'launcher' -Encoding ASCII
+
+    $originalShortcutPath = Get-CodexRtlLegacyShortcutPath
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $originalShortcutPath) | Out-Null
+    Set-Content -LiteralPath $originalShortcutPath -Value 'original codex shortcut bytes' -Encoding ASCII
+
+    Save-CodexRtlState -State ([pscustomobject]@{
+        Version = 1
+        Port = 18317
+        PackageVersion = '1.2.3'
+        InstallLocation = $tmpRestoreLegacyFallbackRoot
+        AppExe = Join-Path $tmpRestoreLegacyFallbackRoot 'Codex.exe'
+        RuntimeRoot = Get-AiRtlRuntimeRoot
+        LauncherScriptPath = $launcherScriptPath
+        ShortcutBackups = @()
+        UpdatedAt = [DateTimeOffset]::Now.ToString('o')
+    })
+
+    Restore-CodexRtlPatch
+
+    Assert-Equal 'original codex shortcut bytes' (Get-Content -LiteralPath $originalShortcutPath -Raw).Trim() 'Legacy restore fallback should not delete the original Codex shortcut.'
+    Assert-True (($script:Output -join "`n") -match 'removed 0 owned Codex RTL shortcut\(s\)') 'Legacy restore fallback should not count missing or non-owned shortcuts as removed.'
+} finally {
+    $env:LOCALAPPDATA = $oldLocalAppData
+    $env:APPDATA = $oldAppData
+    if (Test-Path -LiteralPath $tmpRestoreLegacyFallbackRoot) {
+        Remove-Item -LiteralPath $tmpRestoreLegacyFallbackRoot -Recurse -Force
     }
 }
 
