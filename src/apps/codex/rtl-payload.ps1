@@ -1,8 +1,8 @@
 function Get-CodexRtlPayload {
     @'
 (function () {
-  if (window.__AI_RTL_FIX_CODEX && window.__AI_RTL_FIX_CODEX.observer) {
-    window.__AI_RTL_FIX_CODEX.observer.disconnect();
+  if (window.__CODEX_RTL_FIX_CODEX && window.__CODEX_RTL_FIX_CODEX.observer) {
+    window.__CODEX_RTL_FIX_CODEX.observer.disconnect();
   }
 
   const RTL_RE = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/g;
@@ -73,18 +73,18 @@ function Get-CodexRtlPayload {
   }
 
   function cleanupOwnedDirection(element) {
-    if (!element || !element.hasAttribute('data-ai-rtl-fix')) return;
-    element.removeAttribute('data-ai-rtl-fix');
+    if (!element || !element.hasAttribute('data-codex-rtl-fix')) return;
+    element.removeAttribute('data-codex-rtl-fix');
     element.removeAttribute('dir');
     element.style.textAlign = '';
     element.style.unicodeBidi = '';
   }
 
   function cleanupConversationRoot(root) {
-    if (root.getAttribute('dir') === 'rtl' && root.getAttribute('data-ai-rtl-fix') !== 'rtl') {
+    if (root.getAttribute('dir') === 'rtl' && root.getAttribute('data-codex-rtl-fix') !== 'rtl') {
       root.removeAttribute('dir');
     }
-    if (root.getAttribute('data-ai-rtl-fix') === 'rtl') {
+    if (root.getAttribute('data-codex-rtl-fix') === 'rtl') {
       cleanupOwnedDirection(root);
     }
   }
@@ -103,7 +103,7 @@ function Get-CodexRtlPayload {
 
     if (direction === 'rtl') {
       element.setAttribute('dir', 'rtl');
-      element.setAttribute('data-ai-rtl-fix', 'rtl');
+      element.setAttribute('data-codex-rtl-fix', 'rtl');
       element.style.textAlign = 'start';
       element.style.unicodeBidi = 'plaintext';
       return;
@@ -111,7 +111,7 @@ function Get-CodexRtlPayload {
 
     if (direction === 'mixed-ltr') {
       element.setAttribute('dir', 'auto');
-      element.setAttribute('data-ai-rtl-fix', 'auto');
+      element.setAttribute('data-codex-rtl-fix', 'auto');
       element.style.unicodeBidi = 'plaintext';
     }
   }
@@ -132,7 +132,7 @@ function Get-CodexRtlPayload {
       if (shouldSkipElement(composer)) continue;
       cleanupOwnedDirection(composer);
       composer.setAttribute('dir', 'auto');
-      composer.setAttribute('data-ai-rtl-fix', 'composer');
+      composer.setAttribute('data-codex-rtl-fix', 'composer');
       composer.style.unicodeBidi = 'plaintext';
     }
   }
@@ -173,7 +173,7 @@ function Get-CodexRtlPayload {
     }
   };
 
-  window.__AI_RTL_FIX_CODEX = {
+  window.__CODEX_RTL_FIX_CODEX = {
     apply,
     observer,
     classifyDirection

@@ -39,11 +39,6 @@ function Clear-Host {}
 function Start-Sleep { param([int]$Seconds) }
 function Read-Host { param([string]$Prompt) return '' }
 
-function Install-Patch { $script:Calls += 'Install-Patch' }
-function Restore-Patch { $script:Calls += 'Restore-Patch' }
-function Create-UpdateShortcut { $script:Calls += 'Create-UpdateShortcut' }
-function Install-AutoUpdateTask { $script:Calls += 'Install-AutoUpdateTask' }
-function Uninstall-AutoUpdateTask { $script:Calls += 'Uninstall-AutoUpdateTask' }
 function Show-CodexInspection { $script:Calls += 'Show-CodexInspection' }
 function Install-CodexRtlPatch { $script:Calls += 'Install-CodexRtlPatch' }
 function Restore-CodexRtlPatch { $script:Calls += 'Restore-CodexRtlPatch' }
@@ -72,26 +67,7 @@ Assert-True ([bool](Get-Command -Name Show-Menu -CommandType Function -ErrorActi
 Assert-True ([bool](Get-Command -Name Invoke-SelectedAppAction -CommandType Function -ErrorAction SilentlyContinue)) 'Action dispatcher should load.'
 
 Reset-TestState
-function Read-Host {
-    param([string]$Prompt)
-    if ($Prompt) { $script:Prompts += $Prompt }
-    return 'y'
-}
-Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @((New-TestApp -Id 'claude' -Name 'Claude Desktop'))
-Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Claude patch should dispatch once.'
-Assert-True (($script:Prompts | Where-Object { $_ -match '\(y/n\)' }).Count -eq 1) 'Claude patch confirmation should use lowercase y/n wording.'
-
-Reset-TestState
-function Read-Host {
-    param([string]$Prompt)
-    if ($Prompt) { $script:Prompts += $Prompt }
-    return 'y'
-}
-Invoke-SelectedAppAction -ActionId 'Restore' -SelectedApps @((New-TestApp -Id 'claude' -Name 'Claude Desktop'))
-Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Restore-Patch' }).Count 'Claude restore should dispatch once.'
-
-Reset-TestState
-Invoke-SelectedAppAction -ActionId 'Inspect' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
+Invoke-SelectedAppAction -ActionId 'Inspect'
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Show-CodexInspection' }).Count 'Codex inspect should dispatch once.'
 
 Reset-TestState
@@ -100,10 +76,10 @@ function Read-Host {
     if ($Prompt) { $script:Prompts += $Prompt }
     return 'y'
 }
-Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
-Assert-Equal 0 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Codex patch should not dispatch Claude patch.'
+Invoke-SelectedAppAction -ActionId 'Patch'
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Codex patch should dispatch runtime RTL patch.'
 Assert-True (($script:Prompts | Where-Object { $_ -match '\(y/n\)' }).Count -eq 1) 'Codex patch confirmation should use lowercase y/n wording.'
+Assert-True (($script:Output | Where-Object { $_ -match 'automatically close and relaunch Codex if it is currently open' }).Count -eq 1) 'Codex patch warning should clearly state that open Codex sessions will be relaunched.'
 
 Reset-TestState
 function Read-Host {
@@ -111,8 +87,7 @@ function Read-Host {
     if ($Prompt) { $script:Prompts += $Prompt }
     return 'y'
 }
-Invoke-SelectedAppAction -ActionId 'Restore' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
-Assert-Equal 0 @($script:Calls | Where-Object { $_ -eq 'Restore-Patch' }).Count 'Codex restore should not dispatch Claude restore.'
+Invoke-SelectedAppAction -ActionId 'Restore'
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Restore-CodexRtlPatch' }).Count 'Codex restore should dispatch runtime RTL restore.'
 
 Reset-TestState
@@ -121,7 +96,7 @@ function Read-Host {
     if ($Prompt) { $script:Prompts += $Prompt }
     return 'n'
 }
-Invoke-SelectedAppAction -ActionId 'Restore' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
+Invoke-SelectedAppAction -ActionId 'Restore'
 Assert-Equal 0 @($script:Calls | Where-Object { $_ -eq 'Restore-CodexRtlPatch' }).Count 'Codex restore should honor cancellation.'
 Assert-True (($script:Prompts | Where-Object { $_ -match 'continue' }).Count -eq 1) 'Codex restore should use the standard confirmation prompt.'
 
@@ -136,50 +111,26 @@ function Read-Host {
     if ($script:MenuInputs.Count -eq 0) { throw 'No test input left.' }
     return $script:MenuInputs.Dequeue()
 }
-Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @((New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned'))
+Invoke-SelectedAppAction -ActionId 'Patch'
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Codex patch should treat Enter as yes for the confirmation prompt.'
 Assert-Equal 1 @($script:Prompts | Where-Object { $_ -match 'continue' }).Count 'Empty confirmation input should not re-prompt when yes is the default.'
 
 Reset-TestState
-$script:MenuInputs = [System.Collections.Generic.Queue[string]]::new()
-$script:MenuInputs.Enqueue('')
-function Read-Host {
-    param([string]$Prompt)
-    if ($Prompt) { $script:Prompts += $Prompt }
-    if ($script:MenuInputs.Count -eq 0) { throw 'No test input left.' }
-    return $script:MenuInputs.Dequeue()
-}
-Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @((New-TestApp -Id 'claude' -Name 'Claude Desktop'))
-Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Claude patch should treat Enter as implicit yes.'
-Assert-Equal 1 @($script:Prompts | Where-Object { $_ -match 'continue' }).Count 'Empty confirmation input should not re-prompt before dispatch.'
 function Read-Host { param([string]$Prompt) return '' }
 
-Reset-TestState
-function Read-Host {
-    param([string]$Prompt)
-    if ($Prompt) { $script:Prompts += $Prompt }
-    return 'y'
-}
-Invoke-SelectedAppAction -ActionId 'Patch' -SelectedApps @(
-    (New-TestApp -Id 'claude' -Name 'Claude Desktop'),
-    (New-TestApp -Id 'codex' -Name 'Codex Desktop' -SupportStatus 'Planned')
-)
-Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-Patch' }).Count 'Claude patch should dispatch once with mixed selection.'
-Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Mixed patch should dispatch Codex runtime RTL once.'
-
 $detectedAppNames = @(Get-DetectedApps | ForEach-Object { $_.Name })
-Assert-Equal 2 $detectedAppNames.Count 'Detected app list should include exactly the active app targets.'
-Assert-True (-not [bool]($detectedAppNames | Where-Object { $_ -notin @('Claude Desktop', 'Codex Desktop') })) 'Detected app list should only include active app targets.'
+Assert-Equal 1 $detectedAppNames.Count 'Detected app list should include exactly one active app target.'
+Assert-Equal 'Codex Desktop' $detectedAppNames[0] 'Detected app target should be Codex Desktop only.'
 
 Reset-TestState
 $script:MenuInputs = [System.Collections.Generic.Queue[string]]::new()
-$script:MenuInputs.Enqueue('Q')
+$script:MenuInputs.Enqueue('4')
 function Read-Host {
     param([string]$Prompt)
     if ($script:MenuInputs.Count -eq 0) { throw 'No test input left.' }
     return $script:MenuInputs.Dequeue()
 }
 Show-Menu
-Assert-Equal 0 $script:Calls.Count 'Q should exit menu without dispatching actions.'
+Assert-Equal 0 $script:Calls.Count 'Exit should leave the menu without dispatching actions.'
 
 Write-Host 'menu-flow.tests.ps1 passed'

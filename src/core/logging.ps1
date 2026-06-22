@@ -1,8 +1,7 @@
 ﻿# HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
-# Persistent log -- captures every patch run (including silent ones triggered by
-# the auto-update watcher) so failures can be diagnosed after the fact.
-$global:PatchLogFile = Join-Path $env:ProgramData "ClaudeRtlPatch\patch.log"
+# Persistent log for Codex RTL Fix operations.
+$global:PatchLogFile = Join-Path $env:ProgramData "CodexRtlFix\patch.log"
 
 function Write-LogToFile($level, $msg) {
     try {
@@ -22,13 +21,10 @@ function Write-Step($msg)    { Write-Host "`n► $msg" -ForegroundColor Magenta;
 function Write-Success($msg) { Write-Host "  [+] $msg" -ForegroundColor Green;   Write-LogToFile 'OK'   $msg }
 function Write-Warn($msg)    { Write-Host "  [!] $msg" -ForegroundColor Yellow;  Write-LogToFile 'WARN' $msg }
 
-# Pure Binary Search equivalent to Python's bytearray.find()
+# Pure binary search equivalent to Python's bytearray.find()
 function Find-Bytes([byte[]]$Haystack, [byte[]]$Needle, [int]$StartIndex = 0) {
-    # Fast path: convert both arrays to ISO-8859-1 strings (1 byte ↔ 1 char, lossless
-    # for all 256 byte values) and delegate to String.IndexOf, which is implemented in
-    # native code. This replaces a nested PowerShell byte-by-byte loop that was the
-    # dominant silent period during patching (tens of MB × needle length in pure PS
-    # could take ~30–60s on claude.exe).
+    # Fast path: convert both arrays to ISO-8859-1 strings (1 byte ↔ 1 char,
+    # lossless for all 256 byte values) and delegate to String.IndexOf.
     if ($Needle -eq $null -or $Needle.Length -eq 0 -or $Haystack -eq $null -or $Haystack.Length -lt $Needle.Length) { return -1 }
     if ($StartIndex -lt 0) { $StartIndex = 0 }
     if ($StartIndex -gt ($Haystack.Length - $Needle.Length)) { return -1 }

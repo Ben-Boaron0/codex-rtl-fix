@@ -42,6 +42,6 @@ Assert-Equal 2 $script:Prompts.Count 'Read-YesNoPrompt should keep prompting aft
 $script:Prompts = @()
 $script:Inputs = [System.Collections.Generic.Queue[string]]::new()
 $script:Inputs.Enqueue('')
-Assert-True (Read-YesNoPrompt -Prompt 'Do you want to enable Auto Re-Patch after each Claude update? (Y/n)') 'Read-YesNoPrompt should use yes as the default for auto-repatch prompts.'
+Assert-True (Read-YesNoPrompt -Prompt 'Do you want to relaunch Codex with RTL support now? (Y/n)') 'Read-YesNoPrompt should use yes as the default for Codex relaunch prompts.'
 
 Write-Host 'confirmation-prompt.tests.ps1 passed'

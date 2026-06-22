@@ -1,190 +1,147 @@
-# AI RTL Fix
+# Codex RTL Fix
 
-AI RTL Fix is a Windows RTL patch manager for desktop AI apps.
+**Right-to-left support for Codex Desktop on Windows.**
 
-The current baseline supports **Claude Desktop** using the MIT-licensed work from
-[`shraga100/claude-desktop-rtl-patch`](https://github.com/shraga100/claude-desktop-rtl-patch).
-The goal is to evolve this into one tool for Claude Desktop, Codex Desktop, and
-other AI desktop apps that need better Hebrew, Arabic, Persian, and mixed
-RTL/LTR text rendering.
+Codex RTL Fix installs a local runtime that launches Codex through `Codex RTL` shortcuts, enables a loopback-only DevTools port, and injects a small idempotent RTL script into the Codex renderer. It does not modify the Microsoft Store package under `WindowsApps`.
 
-## Current Status
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6.svg)](#requirements)
+[![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE.svg)](#requirements)
 
-- Claude Desktop patching is imported from the original Claude Desktop RTL Patch.
-- Codex Desktop runtime RTL patching is available without modifying the Store package.
-- The verified `irm | iex` installer flow uses an AI RTL Fix signing key.
+## What It Does
 
-## What It Does Today
+- Creates `Codex RTL` shortcuts that launch Codex with local RTL injection.
+- Keeps code blocks and English-only text left-to-right.
+- Preserves the original Codex install instead of editing `app.asar`, binaries, or signatures.
+- Supports patch, restore, and read-only inspection from one PowerShell menu.
+- Verifies the signed bootstrap script before elevation.
 
-For Claude Desktop, the patcher:
+## Quick Install
 
-- Detects RTL text in Claude responses and the input box.
-- Keeps code blocks and code-like content LTR.
-- Creates backups of modified files.
-- Can restore the original app state.
-- Can enable an automatic re-patch scheduled task after Claude updates.
+Open **Windows PowerShell** and run:
 
-## Running Locally
+```powershell
+irm https://raw.githubusercontent.com/Ben-Boaron0/codex-rtl-fix/main/install.ps1 | iex
+```
 
-Open Windows PowerShell as Administrator from this repository and run:
+The installer verifies `patch.ps1`, downloads the required module files, prompts for elevation, and opens the Codex RTL Fix menu.
+
+If you prefer a local checkout:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\patch.ps1
 ```
 
-The verified installer downloads `patch.ps1` and `patch.ps1.sig` from this
-repository and checks them against the AI RTL Fix public key before elevation:
+## Requirements
 
-```powershell
-irm https://raw.githubusercontent.com/Ben-Boaron0/ai-rtl-fix/main/install.ps1 | iex
-```
+| Requirement | Notes |
+| :--- | :--- |
+| **Windows 10 / 11** | Codex Desktop installed |
+| **Windows PowerShell 5.1** | Use the built-in blue Windows PowerShell, not PowerShell 7 (`pwsh`) |
+| **Administrator** | Required for install, restore, and inspection entrypoints |
 
 ## Menu
 
-The menu is app-first: select target apps, then choose an action available for
-that selection. Codex patching installs a stable per-user runtime and creates
-parallel `Codex RTL` shortcuts in normal writable user-facing locations where a
-writable Codex `.lnk` shortcut already exists, and also creates a per-user
-Start Menu `Codex RTL` shortcut so it appears in the Windows app list even when
-the Microsoft Store Codex entry is not backed by a normal writable `.lnk`. It
-does not modify Codex package files, Store app identity entries, taskbar
-registry data, Start layout policy, or install a Codex background watcher.
+When you run the tool, the menu offers:
 
 ```text
-AI RTL Fix
+Codex Desktop: Found
 
-Select target apps:
-  1. [ ] Claude Desktop: Found
-  2. [ ] Codex Desktop: Found
-
-Toggle app number, A for all supported, C to continue, Q to exit
-
-Selected apps:
-  - Codex Desktop
-
-Select action:
-  1. Patch selected apps
-  2. Restore selected apps
-  3. Inspect selected apps
-  B. Back to app selection
-  Q. Exit
+  1. Patch Codex RTL
+  2. Restore Codex RTL
+  3. Inspect Codex Desktop
+  4. Exit
 ```
 
-## Verification
+- `Patch Codex RTL` installs the local runtime, creates or refreshes `Codex RTL` shortcuts, and relaunches Codex with RTL injection if needed.
+- `Restore Codex RTL` removes the runtime launcher artifacts and clears owned `Codex RTL` shortcuts.
+- `Inspect Codex Desktop` prints read-only package and ASAR diagnostics without modifying anything.
 
-The public-key fingerprint for the verified installer is:
+## Runtime Layout
+
+Codex RTL Fix stores its local state under:
 
 ```text
-dc:6e:f8:65:eb:3c:00:46:76:98:3b:35:9c:77:1e:ba:31:70:4b:5f:fc:c2:b2:3e:5f:4a:d3:46:44:84:7b:1f
+%LOCALAPPDATA%\Codex RTL Fix
 ```
 
-Maintainer commands:
-
-```powershell
-# One-time key creation, then back up C:\Users\Ben\.ai-rtl-fix-signing.key.
-powershell -ExecutionPolicy Bypass -File .\tools\new-signing-key.ps1
-
-# Per release after patch.ps1 changes.
-powershell -ExecutionPolicy Bypass -File .\tools\sign-release.ps1
-powershell -ExecutionPolicy Bypass -File .\tools\verify-signature.ps1
-```
-
-## How The Claude Patch Works
-
-Claude Desktop is an Electron application. The imported Claude patch modifies
-its packaged JavaScript and handles Claude-specific integrity checks:
-
-1. Extracts `app.asar`.
-2. Injects RTL JavaScript into renderer files.
-3. Repackages `app.asar`.
-4. Replaces the ASAR hash embedded in `claude.exe`.
-5. Re-signs modified binaries with a self-signed certificate.
-6. Updates Claude's service certificate expectations.
-7. Stores backups so the original state can be restored.
-
-Codex requires a different app-specific patch strategy. AI RTL Fix treats each
-app as its own adapter rather than assuming Claude's exact integrity model
-applies everywhere.
-
-## Codex Runtime RTL Patch
-
-Codex Desktop is installed as a Microsoft Store package, so AI RTL Fix does not
-edit `app.asar`, binaries, signatures, or files under `WindowsApps`. Instead,
-the Codex patch installs a persistent runtime under `%LOCALAPPDATA%\AI RTL Fix`.
-It creates sibling `Codex RTL` shortcuts next to normal writable Codex `.lnk`
-shortcuts in approved user-facing locations. It also creates a per-user Start
-Menu `Codex RTL` shortcut so users can find it in the Windows Start menu even
-when the Store-installed Codex entry comes from app registration rather than a
-filesystem shortcut. The original `Codex` shortcuts stay untouched, and the AI
-RTL Fix-created `Codex RTL` shortcuts point to a small `wscript.exe` launcher
-so Codex can be started without a persistent visible PowerShell window.
-
-The launcher starts Codex directly from its installed `app\Codex.exe` with a
-local Chromium DevTools Protocol port bound to `127.0.0.1`. This direct launch
-path is required because Microsoft Store app-identity activation does not expose
-the DevTools endpoint needed for automatic runtime injection. After Codex
-exposes CDP, AI RTL Fix injects a small idempotent RTL script into Codex
-renderer targets and exits. During patching, AI RTL Fix restarts Codex once if
-it is already open so the current session receives the runtime injection
-immediately. The script reapplies itself when React recreates the conversation
-or composer DOM.
-The script is content-aware: Hebrew, Arabic, Persian, and mixed RTL text blocks
-get direction fixes, while English-only text, markdown plans, code, controls,
-and app chrome stay in Codex's normal layout.
-
-Windows Defender Controlled Folder Access may warn that `Codex.exe` was blocked
-from a protected workspace such as `%USERPROFILE%\Documents\Codex` when Codex is
-started through this direct launch path. AI RTL Fix stores its runtime and state
-under `%LOCALAPPDATA%\AI RTL Fix` and does not write to Documents, but the
-automated injection mode must launch Codex with the local CDP flags. Users who
-enable Controlled Folder Access may need to allow Codex or keep Codex workspaces
-outside protected folders.
-
-The runtime state is stored at:
+Important files:
 
 ```text
-%LOCALAPPDATA%\AI RTL Fix\Codex\state.json
+%LOCALAPPDATA%\Codex RTL Fix\state.json
+%LOCALAPPDATA%\Codex RTL Fix\runtime\patch.ps1
+%LOCALAPPDATA%\Codex RTL Fix\runtime\launch-codex-rtl.vbs
 ```
 
-The installed runtime files are stored at:
+The runtime creates `Codex RTL` shortcuts in writable user-facing locations and uses those shortcuts to launch Codex with:
 
-```text
-%LOCALAPPDATA%\AI RTL Fix\runtime
-```
+- `--remote-debugging-port=<port>`
+- `--remote-debugging-address=127.0.0.1`
 
-Windows Store app identity entries such as `OpenAI.Codex_...!App` are reported
-but not rewritten. If Windows exposes no writable Codex shortcut for a launch
-path, AI RTL Fix will not try to force that surface. Restore removes AI RTL
-Fix-created `Codex RTL` shortcuts when they are recognized as AI RTL Fix
-launchers. For users patched under earlier builds that replaced shortcuts in
-place, restore also restores backed-up `.lnk` files byte-for-byte and cleans up
-legacy `Codex RTL` shortcut artifacts from earlier builds.
+The injected script reapplies itself when Codex recreates chat or composer DOM.
 
-## Codex Inspection
+## Inspection
 
-Run the normal menu and choose Inspect, or run the read-only inspection
-directly:
+To inspect Codex from a repo checkout:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\patch.ps1 -InspectCodex
 ```
 
-The inspection reports the installed Codex package, `app.asar` shape,
-`webview/index.html` injection candidate, renderer assets, ASAR integrity
-metadata, and whether the current ASAR hashes appear embedded in Codex binaries.
-It does not modify Codex files.
+Inspection reports the installed package, `app.asar` structure, renderer assets, integrity metadata, and likely injection candidates. It does not edit Codex files.
 
-## Attribution
+## Troubleshooting
 
-This project includes code adapted from
-[`shraga100/claude-desktop-rtl-patch`](https://github.com/shraga100/claude-desktop-rtl-patch),
-licensed under the MIT License. See [NOTICE.md](NOTICE.md) and [LICENSE](LICENSE).
+**Codex Desktop was not found**
+
+Install or reopen Codex Desktop, then run Codex RTL Fix again.
+
+**Codex opens without RTL fixes**
+
+Launch Codex through a `Codex RTL` shortcut, not the original Codex shortcut. If the shortcut is missing, run `Patch Codex RTL` again.
+
+**Controlled Folder Access warns about Codex**
+
+Codex RTL Fix stores its runtime under `%LOCALAPPDATA%\Codex RTL Fix` and launches Codex with local DevTools flags so it can inject RTL support. If Controlled Folder Access is enabled, allow Codex or keep Codex workspaces outside protected folders.
+
+**PowerShell shows `Import-Module ... AuditToString is already present`**
+
+You are likely using PowerShell 7. Open the built-in Windows PowerShell instead: press **Win + R**, type `powershell`, and press **Enter**.
+
+## Security And Verification
+
+`install.ps1` verifies an RSA-4096 signature over this repo's `patch.ps1` before running it. `patch.ps1` also pins SHA-256 hashes for every dot-sourced module it loads.
+
+**Public-key fingerprint (SHA-256):**
+
+```text
+dc:6e:f8:65:eb:3c:00:46:76:98:3b:35:9c:77:1e:ba:31:70:4b:5f:fc:c2:b2:3e:5f:4a:d3:46:44:84:7b:1f
+```
+
+To verify a local checkout:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\verify-signature.ps1
+```
+
+Maintainer commands:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\sign-release.ps1
+powershell -ExecutionPolicy Bypass -File .\tools\verify-signature.ps1
+```
 
 ## Disclaimer
 
-This tool modifies installed desktop application files. Use it at your own risk.
-Always keep backups, and restore the original state before reporting issues to
-the upstream app vendors.
+> [!CAUTION]
+> This tool launches and modifies desktop app behavior in unsupported ways. Use it at your own risk.
+
+By installing, you accept that:
+
+1. You trust the code you are running with administrator privileges.
+2. Modifying Codex behavior may not align with vendor support expectations or terms.
+3. Codex RTL support depends on launching Codex through Codex RTL Fix-created shortcuts.
+4. This is a stopgap until Codex provides native RTL support.
 
 ## License
 

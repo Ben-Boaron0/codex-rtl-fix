@@ -29,8 +29,8 @@ function Assert-Equal {
 }
 
 $statePath = Get-CodexRtlStatePath
-Assert-True ($statePath.EndsWith('AI RTL Fix\Codex\state.json')) 'State path should be under the per-user AI RTL Fix Codex folder.'
-Assert-True ((Get-AiRtlRuntimeRoot).EndsWith('AI RTL Fix\runtime')) 'Runtime root should be under LocalAppData.'
+Assert-True ($statePath.EndsWith('Codex RTL Fix\state.json')) 'State path should be under the per-user Codex RTL Fix folder.'
+Assert-True ((Get-AiRtlRuntimeRoot).EndsWith('Codex RTL Fix\runtime')) 'Runtime root should be under LocalAppData.'
 Assert-True (-not [bool](Get-Command -Name Get-CodexRtlWatcherTaskName -CommandType Function -ErrorAction SilentlyContinue)) 'Codex runtime patch should not expose watcher task helpers.'
 Assert-True (-not [bool](Get-Command -Name Start-CodexRtlWatcher -CommandType Function -ErrorAction SilentlyContinue)) 'Codex runtime patch should not expose a background watcher.'
 
@@ -46,14 +46,10 @@ try {
         'src/core/detection.ps1',
         'src/core/prompting.ps1',
         'src/core/asar.ps1',
-        'src/apps/claude/payload.ps1',
-        'src/apps/claude/state.ps1',
-        'src/apps/claude/detection.ps1',
         'src/apps/codex/detection.ps1',
         'src/apps/codex/inspection.ps1',
         'src/apps/codex/rtl-payload.ps1',
         'src/apps/codex/runtime-rtl.ps1',
-        'src/apps/claude/patching.ps1',
         'src/ui/menu.ps1'
     )
     foreach ($requiredRuntimeFile in $requiredRuntimeFiles) {
@@ -73,12 +69,12 @@ $state = New-CodexRtlState -Inspection ([pscustomobject]@{
 }) -Port 18317 -ShortcutBackups @(
     [pscustomobject]@{
         OriginalPath = 'C:\Users\Test\Desktop\Codex.lnk'
-        BackupPath = 'C:\Users\Test\AppData\Local\AI RTL Fix\Codex\backups\shortcuts\abc.lnk'
+        BackupPath = 'C:\Users\Test\AppData\Local\Codex RTL Fix\backups\shortcuts\abc.lnk'
     }
 )
 Assert-Equal 1 $state.Version 'Codex RTL state should have an explicit manifest version.'
-Assert-True ($state.RuntimeRoot.EndsWith('AI RTL Fix\runtime')) 'Codex RTL state should persist the runtime root.'
-Assert-True ($state.LauncherScriptPath.EndsWith('AI RTL Fix\runtime\launch-codex-rtl.vbs')) 'Codex RTL state should persist the launcher script path.'
+Assert-True ($state.RuntimeRoot.EndsWith('Codex RTL Fix\runtime')) 'Codex RTL state should persist the runtime root.'
+Assert-True ($state.LauncherScriptPath.EndsWith('Codex RTL Fix\runtime\launch-codex-rtl.vbs')) 'Codex RTL state should persist the launcher script path.'
 Assert-Equal 1 @($state.OwnedArtifacts).Count 'Codex RTL state should track owned artifacts explicitly.'
 Assert-Equal 'C:\Users\Test\Desktop\Codex.lnk' $state.OwnedArtifacts[0] 'Owned artifacts should include tracked shortcut paths.'
 
@@ -191,7 +187,7 @@ try {
     New-CodexParallelRtlShortcut -SourceShortcut $realShortcut -Spec $realSpec | Out-Null
     Assert-True (Test-Path -LiteralPath $rtlShortcutPath) 'Parallel Codex RTL shortcut should be created next to the source shortcut.'
     Assert-Equal 'original shortcut bytes' (Get-Content -LiteralPath $sourceShortcutPath -Raw).Trim() 'Creating a parallel Codex RTL shortcut should not modify the original Codex shortcut.'
-    Assert-True (Test-CodexRtlOwnedShortcut -ShortcutPath $rtlShortcutPath) 'Created sibling Codex RTL shortcut should be AI RTL Fix-owned.'
+    Assert-True (Test-CodexRtlOwnedShortcut -ShortcutPath $rtlShortcutPath) 'Created sibling Codex RTL shortcut should be Codex RTL Fix-owned.'
 
     New-CodexParallelRtlShortcut -SourceShortcut $realShortcut -Spec $realSpec | Out-Null
     Assert-True (Test-Path -LiteralPath $rtlShortcutPath) 'Re-running patch should refresh an existing owned Codex RTL shortcut in place.'
@@ -257,7 +253,6 @@ try {
     }
     function Install-AiRtlRuntimeFiles { param([string]$SourceRoot) return (Get-AiRtlRuntimeRoot) }
     function Get-CodexShortcutInventory { @() }
-    function Remove-CodexRtlLegacyWatcherTask {}
     function Read-CodexRtlState { $null }
     function Save-CodexRtlState { param($State) $script:SavedState = $State }
     function Start-CodexForRtl {
@@ -271,7 +266,7 @@ try {
 
     $fallbackStartMenuShortcut = Get-CodexRtlShortcutPath
     Assert-True (Test-Path -LiteralPath $fallbackStartMenuShortcut) 'Patch should always create a user Start Menu Codex RTL shortcut even when no seedable Codex shortcut exists there.'
-    Assert-True (Test-CodexRtlOwnedShortcut -ShortcutPath $fallbackStartMenuShortcut) 'Fallback user Start Menu Codex RTL shortcut should be AI RTL Fix-owned.'
+    Assert-True (Test-CodexRtlOwnedShortcut -ShortcutPath $fallbackStartMenuShortcut) 'Fallback user Start Menu Codex RTL shortcut should be Codex RTL Fix-owned.'
     Assert-True (@($script:SavedState.OwnedArtifacts) -contains $fallbackStartMenuShortcut) 'Saved state should track the fallback user Start Menu Codex RTL shortcut.'
     Assert-True (($script:Output -join "`n") -match 'Created or refreshed 1 Codex RTL shortcut') 'Patch wording should count the fallback Start Menu Codex RTL shortcut creation.'
 } finally {
@@ -458,50 +453,6 @@ try {
     }
 }
 
-$tmpRestoreLegacyFallbackRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-restore-legacy-fallback-test-{0}" -f ([guid]::NewGuid()))
-New-Item -ItemType Directory -Force -Path $tmpRestoreLegacyFallbackRoot | Out-Null
-$oldLocalAppData = $env:LOCALAPPDATA
-$oldAppData = $env:APPDATA
-try {
-    $env:LOCALAPPDATA = Join-Path $tmpRestoreLegacyFallbackRoot 'LocalAppData'
-    $env:APPDATA = Join-Path $tmpRestoreLegacyFallbackRoot 'AppData\Roaming'
-    $script:Output = @()
-    $script:StartedProcesses = @()
-    $script:MockCodexProcesses = @()
-
-    $launcherScriptPath = Get-CodexRtlLauncherScriptPath
-    $launcherScriptDir = Split-Path -Parent $launcherScriptPath
-    New-Item -ItemType Directory -Force -Path $launcherScriptDir | Out-Null
-    Set-Content -LiteralPath $launcherScriptPath -Value 'launcher' -Encoding ASCII
-
-    $originalShortcutPath = Get-CodexRtlLegacyShortcutPath
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $originalShortcutPath) | Out-Null
-    Set-Content -LiteralPath $originalShortcutPath -Value 'original codex shortcut bytes' -Encoding ASCII
-
-    Save-CodexRtlState -State ([pscustomobject]@{
-        Version = 1
-        Port = 18317
-        PackageVersion = '1.2.3'
-        InstallLocation = $tmpRestoreLegacyFallbackRoot
-        AppExe = Join-Path $tmpRestoreLegacyFallbackRoot 'Codex.exe'
-        RuntimeRoot = Get-AiRtlRuntimeRoot
-        LauncherScriptPath = $launcherScriptPath
-        ShortcutBackups = @()
-        UpdatedAt = [DateTimeOffset]::Now.ToString('o')
-    })
-
-    Restore-CodexRtlPatch
-
-    Assert-Equal 'original codex shortcut bytes' (Get-Content -LiteralPath $originalShortcutPath -Raw).Trim() 'Legacy restore fallback should not delete the original Codex shortcut.'
-    Assert-True (($script:Output -join "`n") -match 'removed 0 owned Codex RTL shortcut\(s\)') 'Legacy restore fallback should not count missing or non-owned shortcuts as removed.'
-} finally {
-    $env:LOCALAPPDATA = $oldLocalAppData
-    $env:APPDATA = $oldAppData
-    if (Test-Path -LiteralPath $tmpRestoreLegacyFallbackRoot) {
-        Remove-Item -LiteralPath $tmpRestoreLegacyFallbackRoot -Recurse -Force
-    }
-}
-
 $args = New-CodexRtlLaunchArguments -Port 18317
 Assert-True ($args -contains '--remote-debugging-port=18317') 'Launch args should enable CDP on the chosen port.'
 Assert-True ($args -contains '--remote-debugging-address=127.0.0.1') 'Launch args should bind CDP to loopback only.'
@@ -536,11 +487,11 @@ Assert-True (-not (Test-CodexDevToolsTarget -Target $remoteTarget)) 'Unrelated w
 Assert-True (-not (Test-CodexDevToolsTarget -Target $codexTitledRemoteTarget)) 'Non-app pages should be rejected even when their title contains Codex.'
 
 $payload = Get-CodexRtlPayload
-Assert-True ($payload.Contains('window.__AI_RTL_FIX_CODEX')) 'Payload should be idempotent.'
+Assert-True ($payload.Contains('window.__CODEX_RTL_FIX_CODEX')) 'Payload should be idempotent.'
 Assert-True ($payload.Contains('classifyDirection')) 'Payload should classify text direction.'
 Assert-True ($payload.Contains('RTL_RE')) 'Payload should detect RTL codepoints.'
 Assert-True ($payload.Contains('unicodeBidi')) 'Payload should use bidi-safe rendering.'
-Assert-True ($payload.Contains('data-ai-rtl-fix')) 'Payload should mark only tool-owned changes.'
+Assert-True ($payload.Contains('data-codex-rtl-fix')) 'Payload should mark only tool-owned changes.'
 Assert-True ($payload.Contains('removeAttribute(''dir'')') -or $payload.Contains('removeAttribute("dir")')) 'Payload should clean stale broad dir attributes.'
 Assert-True (-not ($payload -match "querySelectorAll\('\[data-thread-find-target=.*setAttribute\('dir', 'rtl'")) 'Payload should not force the conversation root to RTL.'
 Assert-True ($payload.Contains('[contenteditable="true"]')) 'Payload should target quoted contenteditable composers.'

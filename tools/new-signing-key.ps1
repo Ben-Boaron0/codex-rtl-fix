@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-    Generates the AI RTL Fix maintainer RSA signing key.
+    Generates the Codex RTL Fix maintainer RSA signing key.
 .DESCRIPTION
     Creates an RSA-4096 private key in the same portable JSON format consumed
     by tools\sign-release.ps1. The private key is written outside the repository
     by default and must never be committed.
 #>
 param(
-    [string]$KeyPath = (Join-Path $HOME ".ai-rtl-fix-signing.key"),
+    [string]$KeyPath = (Join-Path $HOME ".codex-rtl-fix-signing.key"),
     [switch]$Force
 )
 
