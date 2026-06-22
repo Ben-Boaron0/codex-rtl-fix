@@ -5,14 +5,15 @@
     Reads patch.ps1 as raw bytes, signs with RSA-PKCS1-SHA256, writes patch.ps1.sig
     (base64). Run this every time patch.ps1 changes, BEFORE 'git add'.
 
-    The private key is stored at $HOME\.codex-rtl-fix-signing.key by default. It
-    NEVER appears in the repository. Back it up to an encrypted USB / password
-    manager -- losing it means you can never ship a verified update again.
+    The private key is stored at .signing-key in the repo root by default. It
+    NEVER appears in the repository (added to .gitignore). Back it up to an
+    encrypted USB / password manager -- losing it means you can never ship a
+    verified update again.
 .NOTES
     Maintainer-only tool. Not shipped to end users.
 #>
 param(
-    [string]$KeyPath = (Join-Path $HOME ".codex-rtl-fix-signing.key"),
+    [string]$KeyPath = $null,
     [string]$Target  = $null
 )
 
@@ -20,6 +21,7 @@ $ErrorActionPreference = 'Stop'
 
 # Resolve repo root: parent of the directory this script lives in.
 $repoRoot = Split-Path -Parent $PSScriptRoot
+if (-not $KeyPath) { $KeyPath = Join-Path $repoRoot ".signing-key" }
 if (-not $Target) { $Target = Join-Path $repoRoot 'patch.ps1' }
 
 if (-not (Test-Path $KeyPath)) {

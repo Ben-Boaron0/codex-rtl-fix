@@ -20,12 +20,12 @@ Codex RTL Fix installs a small local runtime that launches Codex through `Codex 
 | Requirement | Notes |
 | :--- | :--- |
 | **Windows 10 / 11** | Codex Desktop installed |
-| **PowerShell** | Windows PowerShell 5.1 (`powershell.exe`) or PowerShell 7 (`pwsh`) |
+| **Windows PowerShell** | Windows PowerShell 5.1 (`powershell.exe`) or PowerShell 7 (`pwsh`) |
 | **Administrator** | Required for install and restore |
 
 ## Quick Install
 
-Open **PowerShell** and run:
+Open **Windows PowerShell** and run:
 
 ```powershell
 irm https://raw.githubusercontent.com/Ben-Boaron0/codex-rtl-fix/main/install.ps1 | iex
@@ -93,7 +93,7 @@ Launch Codex through a `Codex RTL` shortcut, not the original Codex shortcut. If
 
 Codex RTL Fix stores its runtime under `%LOCALAPPDATA%\Codex RTL Fix` and launches Codex with local DevTools flags so it can inject RTL support. If Controlled Folder Access is enabled, allow Codex or keep Codex workspaces outside protected folders.
 
-**PowerShell shows `Import-Module ... AuditToString is already present`**
+**Windows PowerShell shows `Import-Module ... AuditToString is already present`**
 
 This is a cosmetic warning from the Appx module when running under PowerShell 7. It does not affect the tool. You can safely ignore it, or switch to Windows PowerShell (`powershell.exe`) to suppress it.
 
