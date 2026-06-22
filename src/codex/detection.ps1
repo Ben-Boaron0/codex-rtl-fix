@@ -1,4 +1,25 @@
-﻿function Get-AppDetectionStatus {
+function Find-CodexDir {
+    $pkg = Get-AppxPackage OpenAI.Codex -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pkg -and $pkg.InstallLocation) { return $pkg.InstallLocation }
+    return $null
+}
+
+function Get-CodexInstallInfo {
+    $pkg = Get-AppxPackage OpenAI.Codex -ErrorAction SilentlyContinue | Select-Object -First 1
+    $installLocation = if ($pkg) { $pkg.InstallLocation } else { $null }
+    $appDir = if ($installLocation) { Join-Path $installLocation 'app' } else { $null }
+    $appExe = if ($appDir) { Join-Path $appDir 'Codex.exe' } else { $null }
+
+    [pscustomobject]@{
+        PackageFound = [bool]$pkg
+        PackageName = if ($pkg) { $pkg.Name } else { $null }
+        PackageVersion = if ($pkg) { $pkg.Version.ToString() } else { $null }
+        InstallLocation = $installLocation
+        AppExe = $appExe
+    }
+}
+
+function Get-AppDetectionStatus {
     param(
         [string]$Name,
         [string]$InstallLocation,
@@ -33,4 +54,3 @@ function Show-DetectedApps {
         }
     }
 }
-

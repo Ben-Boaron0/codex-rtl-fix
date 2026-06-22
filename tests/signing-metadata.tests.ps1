@@ -32,7 +32,7 @@ Assert-Match $install ([regex]::Escape($expectedRepoBase)) 'install.ps1 should d
 Assert-Match $patch ([regex]::Escape($expectedRepoBase + '/install.ps1')) 'patch.ps1 bootstrap fallback should use Codex RTL Fix install.ps1.'
 Assert-Match $readme ([regex]::Escape('irm https://raw.githubusercontent.com/Ben-Boaron0/codex-rtl-fix/main/install.ps1 | iex')) 'README should document the public Codex RTL Fix one-line installer.'
 Assert-Match $readme 'Codex RTL' 'README should explain the Codex RTL shortcut behavior.'
-Assert-Match $install 'src/core/logging\.ps1' 'install.ps1 should download the module tree needed by patch.ps1.'
+Assert-Match $install 'src/shared/logging\.ps1' 'install.ps1 should download the module tree needed by patch.ps1.'
 Assert-Match $install 'New-Item -ItemType Directory' 'install.ps1 should create module directories in the temp patch folder.'
 Assert-Match $patch 'CodexRtlFixModuleManifest' 'Signed patch.ps1 should pin hashes for downloaded modules.'
 Assert-Match $patch 'Get-FileHash' 'patch.ps1 should verify module hashes before loading modules.'
