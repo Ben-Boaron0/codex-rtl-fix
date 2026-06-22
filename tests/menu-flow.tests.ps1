@@ -39,7 +39,6 @@ function Clear-Host {}
 function Start-Sleep { param([int]$Seconds) }
 function Read-Host { param([string]$Prompt) return '' }
 
-function Show-CodexInspection { $script:Calls += 'Show-CodexInspection' }
 function Install-CodexRtlPatch { $script:Calls += 'Install-CodexRtlPatch' }
 function Restore-CodexRtlPatch { $script:Calls += 'Restore-CodexRtlPatch' }
 
@@ -65,10 +64,6 @@ function New-TestApp {
 
 Assert-True ([bool](Get-Command -Name Show-Menu -CommandType Function -ErrorAction SilentlyContinue)) 'Show-Menu should load.'
 Assert-True ([bool](Get-Command -Name Invoke-SelectedAppAction -CommandType Function -ErrorAction SilentlyContinue)) 'Action dispatcher should load.'
-
-Reset-TestState
-Invoke-SelectedAppAction -ActionId 'Inspect'
-Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Show-CodexInspection' }).Count 'Codex inspect should dispatch once.'
 
 Reset-TestState
 function Read-Host {
@@ -124,7 +119,7 @@ Assert-Equal 'Codex Desktop' $detectedAppNames[0] 'Detected app target should be
 
 Reset-TestState
 $script:MenuInputs = [System.Collections.Generic.Queue[string]]::new()
-$script:MenuInputs.Enqueue('4')
+$script:MenuInputs.Enqueue('3')
 function Read-Host {
     param([string]$Prompt)
     if ($script:MenuInputs.Count -eq 0) { throw 'No test input left.' }

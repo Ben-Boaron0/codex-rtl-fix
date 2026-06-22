@@ -14,14 +14,16 @@ $RepoBase = 'https://raw.githubusercontent.com/Ben-Boaron0/codex-rtl-fix/main'
 $TmpRoot  = Join-Path $env:TEMP 'codex_rtl_fix_patch'
 $TmpFile  = Join-Path $TmpRoot 'patch.ps1'
 $ModuleFiles = @(
-    'src/core/logging.ps1',
-    'src/core/detection.ps1',
-    'src/core/prompting.ps1',
-    'src/core/asar.ps1',
-    'src/apps/codex/detection.ps1',
-    'src/apps/codex/inspection.ps1',
-    'src/apps/codex/rtl-payload.ps1',
-    'src/apps/codex/runtime-rtl.ps1',
+    'src/shared/logging.ps1',
+    'src/shared/prompting.ps1',
+    'src/shared/asar.ps1',
+    'src/codex/detection.ps1',
+    'src/codex/rtl-payload.ps1',
+    'src/runtime/state.ps1',
+    'src/runtime/files.ps1',
+    'src/runtime/shortcuts.ps1',
+    'src/runtime/launch.ps1',
+    'src/runtime/patching.ps1',
     'src/ui/menu.ps1'
 )
 

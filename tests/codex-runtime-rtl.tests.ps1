@@ -30,7 +30,7 @@ function Assert-Equal {
 
 $statePath = Get-CodexRtlStatePath
 Assert-True ($statePath.EndsWith('Codex RTL Fix\state.json')) 'State path should be under the per-user Codex RTL Fix folder.'
-Assert-True ((Get-AiRtlRuntimeRoot).EndsWith('Codex RTL Fix\runtime')) 'Runtime root should be under LocalAppData.'
+Assert-True ((Get-CodexRtlRuntimeRoot).EndsWith('Codex RTL Fix\runtime')) 'Runtime root should be under LocalAppData.'
 Assert-True (-not [bool](Get-Command -Name Get-CodexRtlWatcherTaskName -CommandType Function -ErrorAction SilentlyContinue)) 'Codex runtime patch should not expose watcher task helpers.'
 Assert-True (-not [bool](Get-Command -Name Start-CodexRtlWatcher -CommandType Function -ErrorAction SilentlyContinue)) 'Codex runtime patch should not expose a background watcher.'
 
@@ -39,17 +39,19 @@ New-Item -ItemType Directory -Force -Path $tmpRuntimeRoot | Out-Null
 $oldLocalAppData = $env:LOCALAPPDATA
 try {
     $env:LOCALAPPDATA = Join-Path $tmpRuntimeRoot 'LocalAppData'
-    $runtimeRoot = Install-AiRtlRuntimeFiles -SourceRoot $repoRoot
+    $runtimeRoot = Install-CodexRtlRuntimeFiles -SourceRoot $repoRoot
     $requiredRuntimeFiles = @(
         'patch.ps1',
-        'src/core/logging.ps1',
-        'src/core/detection.ps1',
-        'src/core/prompting.ps1',
-        'src/core/asar.ps1',
-        'src/apps/codex/detection.ps1',
-        'src/apps/codex/inspection.ps1',
-        'src/apps/codex/rtl-payload.ps1',
-        'src/apps/codex/runtime-rtl.ps1',
+        'src/shared/logging.ps1',
+        'src/shared/prompting.ps1',
+        'src/shared/asar.ps1',
+        'src/codex/detection.ps1',
+        'src/codex/rtl-payload.ps1',
+        'src/runtime/state.ps1',
+        'src/runtime/files.ps1',
+        'src/runtime/shortcuts.ps1',
+        'src/runtime/launch.ps1',
+        'src/runtime/patching.ps1',
         'src/ui/menu.ps1'
     )
     foreach ($requiredRuntimeFile in $requiredRuntimeFiles) {
@@ -62,7 +64,7 @@ try {
     }
 }
 
-$state = New-CodexRtlState -Inspection ([pscustomobject]@{
+$state = New-CodexRtlState -InstallInfo ([pscustomobject]@{
     PackageVersion = '1.2.3'
     InstallLocation = 'C:\Program Files\WindowsApps\OpenAI.Codex_fake'
     AppExe = 'C:\Program Files\WindowsApps\OpenAI.Codex_fake\app\Codex.exe'
@@ -78,7 +80,7 @@ Assert-True ($state.LauncherScriptPath.EndsWith('Codex RTL Fix\runtime\launch-co
 Assert-Equal 1 @($state.OwnedArtifacts).Count 'Codex RTL state should track owned artifacts explicitly.'
 Assert-Equal 'C:\Users\Test\Desktop\Codex.lnk' $state.OwnedArtifacts[0] 'Owned artifacts should include tracked shortcut paths.'
 
-$launcherScript = New-CodexRtlLauncherScriptContent -PatchScriptPath (Join-Path (Get-AiRtlRuntimeRoot) 'patch.ps1')
+$launcherScript = New-CodexRtlLauncherScriptContent -PatchScriptPath (Join-Path (Get-CodexRtlRuntimeRoot) 'patch.ps1')
 Assert-True ($launcherScript.Contains('powershell.exe')) 'VBS launcher should run PowerShell internally.'
 Assert-True ($launcherScript.Contains('-LaunchCodexRtl')) 'VBS launcher should call the explicit Codex launch entrypoint.'
 Assert-True ($launcherScript.Contains('Chr(34)')) 'VBS launcher should build the quoted patch path using Chr(34).'
@@ -90,24 +92,23 @@ New-Item -ItemType Directory -Force -Path (Join-Path $tmpIconRoot 'app\resources
 try {
     $fakeIcon = Join-Path $tmpIconRoot 'app\resources\icon.ico'
     Set-Content -LiteralPath $fakeIcon -Value 'ico' -Encoding ASCII
-    $fakeInspectionForIcon = [pscustomobject]@{
+    $fakeInstallInfoForIcon = [pscustomobject]@{
         InstallLocation = $tmpIconRoot
         AppExe = Join-Path $tmpIconRoot 'app\Codex.exe'
     }
-    Assert-Equal $fakeIcon (Get-CodexIconLocation -Inspection $fakeInspectionForIcon) 'Icon location should prefer app\resources\icon.ico.'
+    Assert-Equal $fakeIcon (Get-CodexIconLocation -InstallInfo $fakeInstallInfoForIcon) 'Icon location should prefer app\resources\icon.ico.'
 } finally {
     if (Test-Path -LiteralPath $tmpIconRoot) { Remove-Item -LiteralPath $tmpIconRoot -Recurse -Force }
 }
-$fakeInspectionFallback = [pscustomobject]@{
+$fakeInstallInfoFallback = [pscustomobject]@{
     InstallLocation = 'C:\Missing\OpenAI.Codex'
     AppExe = 'C:\Missing\OpenAI.Codex\app\Codex.exe'
 }
-Assert-Equal "$($fakeInspectionFallback.AppExe),0" (Get-CodexIconLocation -Inspection $fakeInspectionFallback) 'Icon location should fall back to Codex.exe,0 before shell icons.'
+Assert-Equal "$($fakeInstallInfoFallback.AppExe),0" (Get-CodexIconLocation -InstallInfo $fakeInstallInfoFallback) 'Icon location should fall back to Codex.exe,0 before shell icons.'
 $installBody = (Get-Command -Name Install-CodexRtlPatch -CommandType Function).ScriptBlock.ToString()
 Assert-True ($installBody.Contains('OwnedArtifacts')) 'Patch flow should persist owned artifacts explicitly.'
 Assert-True ($installBody.Contains('Codex RTL')) 'Patch flow should create sibling Codex RTL shortcuts.'
 $launchBody = (Get-Command -Name Launch-CodexRtl -CommandType Function).ScriptBlock.ToString()
-Assert-True (-not ($launchBody.Contains('Start-CodexWithRtlActivation'))) 'Codex launch should use the known-working direct executable path.'
 Assert-True ($launchBody.Contains('Start-CodexForRtl')) 'Codex launch should delegate to the approved-verb launch helper.'
 
 $roots = @(Get-CodexShortcutSearchRoots)
@@ -180,7 +181,7 @@ try {
         Arguments = ''
     }
     $rtlShortcutPath = Get-CodexSiblingRtlShortcutPath -ShortcutPath $sourceShortcutPath
-    $realSpec = New-CodexLauncherShortcutSpec -Inspection ([pscustomobject]@{
+    $realSpec = New-CodexLauncherShortcutSpec -InstallInfo ([pscustomobject]@{
         InstallLocation = $tmpRoot
         AppExe = Join-Path $tmpRoot 'Codex.exe'
     })
@@ -243,7 +244,7 @@ try {
 
     New-Item -ItemType Directory -Force -Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs') | Out-Null
 
-    function Get-CodexInstallInspection {
+    function Get-CodexInstallInfo {
         [pscustomobject]@{
             PackageFound = $true
             PackageVersion = '1.2.3'
@@ -251,7 +252,7 @@ try {
             AppExe = $fakeAppExe
         }
     }
-    function Install-AiRtlRuntimeFiles { param([string]$SourceRoot) return (Get-AiRtlRuntimeRoot) }
+    function Install-CodexRtlRuntimeFiles { param([string]$SourceRoot) return (Get-CodexRtlRuntimeRoot) }
     function Get-CodexShortcutInventory { @() }
     function Read-CodexRtlState { $null }
     function Save-CodexRtlState { param($State) $script:SavedState = $State }
@@ -310,7 +311,7 @@ try {
     $ownedShortcutPath = Join-Path $tmpRestoreRoot 'Desktop\Codex RTL.lnk'
     $ownedShortcutDir = Split-Path -Parent $ownedShortcutPath
     New-Item -ItemType Directory -Force -Path $ownedShortcutDir | Out-Null
-    $ownedShortcutSpec = New-CodexLauncherShortcutSpec -Inspection ([pscustomobject]@{
+    $ownedShortcutSpec = New-CodexLauncherShortcutSpec -InstallInfo ([pscustomobject]@{
         InstallLocation = $tmpRestoreRoot
         AppExe = Join-Path $tmpRestoreRoot 'Codex.exe'
     })
@@ -350,7 +351,7 @@ try {
         PackageVersion = '1.2.3'
         InstallLocation = $tmpRestoreRoot
         AppExe = Join-Path $tmpRestoreRoot 'Codex.exe'
-        RuntimeRoot = Get-AiRtlRuntimeRoot
+        RuntimeRoot = Get-CodexRtlRuntimeRoot
         LauncherScriptPath = $launcherScriptPath
         ShortcutBackups = @(
             [pscustomobject]@{
@@ -408,7 +409,7 @@ try {
 
     $ownedShortcutPath = Join-Path $tmpRestoreNoRestartRoot 'Desktop\Codex RTL.lnk'
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ownedShortcutPath) | Out-Null
-    $ownedShortcutSpec = New-CodexLauncherShortcutSpec -Inspection ([pscustomobject]@{
+    $ownedShortcutSpec = New-CodexLauncherShortcutSpec -InstallInfo ([pscustomobject]@{
         InstallLocation = $tmpRestoreNoRestartRoot
         AppExe = Join-Path $tmpRestoreNoRestartRoot 'Codex.exe'
     })
@@ -435,7 +436,7 @@ try {
         PackageVersion = '1.2.3'
         InstallLocation = $tmpRestoreNoRestartRoot
         AppExe = Join-Path $tmpRestoreNoRestartRoot 'Codex.exe'
-        RuntimeRoot = Get-AiRtlRuntimeRoot
+        RuntimeRoot = Get-CodexRtlRuntimeRoot
         LauncherScriptPath = $launcherScriptPath
         ShortcutBackups = @()
         OwnedArtifacts = @($ownedShortcutPath)

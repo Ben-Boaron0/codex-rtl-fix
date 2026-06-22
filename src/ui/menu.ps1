@@ -22,8 +22,7 @@ function Write-ActionMenu {
     Write-Host "Select an action:" -ForegroundColor White
     Write-Host "  1. Patch Codex RTL"
     Write-Host "  2. Restore Codex RTL"
-    Write-Host "  3. Inspect Codex Desktop"
-    Write-Host "  4. Exit"
+    Write-Host "  3. Exit"
 }
 
 function Invoke-SelectedAppAction {
@@ -60,9 +59,6 @@ function Invoke-SelectedAppAction {
                 -Warning 'This will remove the Codex runtime RTL launcher and may require a Codex restart to fully clear injected state.' `
                 -Action { Restore-CodexRtlPatch }
         }
-        'Inspect' {
-            Show-CodexInspection
-        }
         default {
             Write-Warn "Unknown action: $ActionId"
         }
@@ -83,8 +79,7 @@ function Show-Menu {
         switch ($choice) {
             '1' { Invoke-SelectedAppAction -ActionId 'Patch' }
             '2' { Invoke-SelectedAppAction -ActionId 'Restore' }
-            '3' { Invoke-SelectedAppAction -ActionId 'Inspect' }
-            '4' { return }
+            '3' { return }
             default {
                 Write-Warn "Unknown action: $choice"
                 Start-Sleep -Seconds 2

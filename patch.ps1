@@ -2,11 +2,10 @@
 .SYNOPSIS
     Codex RTL Fix
 .DESCRIPTION
-    Installs, restores, and inspects the local Codex Desktop RTL runtime.
+    Installs and restores the local Codex Desktop RTL runtime.
 #>
 param(
     [string]$TrustedPubKey,
-    [switch]$InspectCodex,
     [switch]$LaunchCodexRtl,
     [switch]$SkipMain
 )
@@ -17,7 +16,6 @@ if ((-not $SkipMain) -and $RequiresElevation -and (-not $IsAdmin)) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
     if ($PSCommandPath) {
         $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
-        if ($InspectCodex) { $args += '-InspectCodex' }
         if ($TrustedPubKey) { $args += @('-TrustedPubKey', $TrustedPubKey) }
         Start-Process -FilePath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
             -Verb RunAs `
@@ -35,15 +33,17 @@ if ((-not $SkipMain) -and $RequiresElevation -and (-not $IsAdmin)) {
 }
 
 $script:CodexRtlFixModuleManifest = [ordered]@{
-    'src/core/logging.ps1' = 'd13e9253a4c93ea497704450fa6541338d34aedbcb0dd73811a7d691c03a660c'
-    'src/core/detection.ps1' = 'd13409ae3eb8c92079af4590797717d5c7cb4182b0298bcfbb7cec4d76d86ca9'
-    'src/core/prompting.ps1' = '1f21230a4fc91d69a41e370d52768b02e70ab32d9f35fb64824c16ac0cc23202'
-    'src/core/asar.ps1' = 'efff1c7b3a904d6d1dd6dc7b8a2a229b38a5c3ec69c32c8b35f1eb4143fb9a7b'
-    'src/apps/codex/detection.ps1' = '79eedece45798244dcfd3008a9f1ac4f801ad69d267452b6718d145aa4cadab2'
-    'src/apps/codex/inspection.ps1' = '49d80c53ccc219b153c4364b6c4a3dc13a95e3b5592ade3c39fb8ed15aa7f9d6'
-    'src/apps/codex/rtl-payload.ps1' = 'c1020f6a9cbfa93475666a340232f929a821a40356d4bae56e434725b3ccba88'
-    'src/apps/codex/runtime-rtl.ps1' = '5769ea397b2b53657f2ba76c87c21c9df552ac74f18d821df838990bee60bf0d'
-    'src/ui/menu.ps1' = 'e778c708dd6d1239a91792f2db58f1258a7b809a86a40cafa0c51995356118cb'
+    'src/shared/logging.ps1' = 'e4939b8b239036459e3b59429ae62590de53cbf51b9c22bec1a262938b1223a4'
+    'src/shared/prompting.ps1' = '1f21230a4fc91d69a41e370d52768b02e70ab32d9f35fb64824c16ac0cc23202'
+    'src/shared/asar.ps1' = 'efff1c7b3a904d6d1dd6dc7b8a2a229b38a5c3ec69c32c8b35f1eb4143fb9a7b'
+    'src/codex/detection.ps1' = 'b3a2f5fdeca81dea966820fc4a0daa0842ca7cd9c52d98f8a553b1311985a19d'
+    'src/codex/rtl-payload.ps1' = 'f54f9ac96316b6fa4a53d831f249dbb54860c2918234cd23da32e08a0caaf712'
+    'src/runtime/state.ps1' = '490d408bafc1de898c7d950abc12961185b57633303289e2448936f61fcc0c22'
+    'src/runtime/files.ps1' = 'ed7edfae4c79d6e58becbef2eaa0fb3494aabe28fb69e280064087b0dfa7244e'
+    'src/runtime/shortcuts.ps1' = '39a7445dddf44b5946a023360fbcb08c3148dca23677b4309e4f3260aa5d0ffc'
+    'src/runtime/launch.ps1' = '82d9a2fa318a07d8aea6f716c68c18ccf18e178ce8b4f1572e2c9177ad86c199'
+    'src/runtime/patching.ps1' = '61de687559c7bdb176c993ccf7440680a11a4693d09e2bdb154f0c9ed0f8c001'
+    'src/ui/menu.ps1' = 'bedb04b7a7e1f9a45ba8001fe35b606a6354adf4917cc7d7cc8cfa27253c4d64'
 }
 
 foreach ($module in $script:CodexRtlFixModuleManifest.Keys) {
@@ -60,15 +60,9 @@ foreach ($module in $script:CodexRtlFixModuleManifest.Keys) {
 }
 
 $script:CodexRtlPatchScriptPath = $PSCommandPath
-$script:AiRtlPatchScriptPath = $PSCommandPath
 
 if ($SkipMain) {
     return
-}
-
-if ($InspectCodex) {
-    Show-CodexInspection
-    Exit
 }
 
 if ($LaunchCodexRtl) {

@@ -13,7 +13,6 @@ Codex RTL Fix installs a local runtime that launches Codex through `Codex RTL` s
 - Creates `Codex RTL` shortcuts that launch Codex with local RTL injection.
 - Keeps code blocks and English-only text left-to-right.
 - Preserves the original Codex install instead of editing `app.asar`, binaries, or signatures.
-- Supports patch, restore, and read-only inspection from one PowerShell menu.
 - Verifies the signed bootstrap script before elevation.
 
 ## Quick Install
@@ -38,7 +37,7 @@ powershell -ExecutionPolicy Bypass -File .\patch.ps1
 | :--- | :--- |
 | **Windows 10 / 11** | Codex Desktop installed |
 | **Windows PowerShell 5.1** | Use the built-in blue Windows PowerShell, not PowerShell 7 (`pwsh`) |
-| **Administrator** | Required for install, restore, and inspection entrypoints |
+| **Administrator** | Required for install and restore |
 
 ## Menu
 
@@ -49,13 +48,11 @@ Codex Desktop: Found
 
   1. Patch Codex RTL
   2. Restore Codex RTL
-  3. Inspect Codex Desktop
-  4. Exit
+  3. Exit
 ```
 
 - `Patch Codex RTL` installs the local runtime, creates or refreshes `Codex RTL` shortcuts, and relaunches Codex with RTL injection if needed.
 - `Restore Codex RTL` removes the runtime launcher artifacts and clears owned `Codex RTL` shortcuts.
-- `Inspect Codex Desktop` prints read-only package and ASAR diagnostics without modifying anything.
 
 ## Runtime Layout
 
@@ -79,16 +76,6 @@ The runtime creates `Codex RTL` shortcuts in writable user-facing locations and 
 - `--remote-debugging-address=127.0.0.1`
 
 The injected script reapplies itself when Codex recreates chat or composer DOM.
-
-## Inspection
-
-To inspect Codex from a repo checkout:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\patch.ps1 -InspectCodex
-```
-
-Inspection reports the installed package, `app.asar` structure, renderer assets, integrity metadata, and likely injection candidates. It does not edit Codex files.
 
 ## Troubleshooting
 
