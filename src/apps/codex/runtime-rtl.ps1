@@ -1,9 +1,9 @@
 function Get-CodexRtlStateRoot {
-    Join-Path $env:LOCALAPPDATA 'AI RTL Fix\Codex'
+    Join-Path $env:LOCALAPPDATA 'Codex RTL Fix'
 }
 
 function Get-AiRtlRuntimeRoot {
-    Join-Path $env:LOCALAPPDATA 'AI RTL Fix\runtime'
+    Join-Path (Get-CodexRtlStateRoot) 'runtime'
 }
 
 function Get-CodexRtlStatePath {
@@ -20,10 +20,6 @@ function Get-CodexRtlWorkingDirectory {
 
 function Get-CodexRtlShortcutPath {
     Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Codex RTL.lnk'
-}
-
-function Get-CodexRtlLegacyShortcutPath {
-    Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Codex.lnk'
 }
 
 function Get-CodexRtlLauncherScriptPath {
@@ -80,14 +76,10 @@ function Install-AiRtlRuntimeFiles {
         'src/core/detection.ps1',
         'src/core/prompting.ps1',
         'src/core/asar.ps1',
-        'src/apps/claude/payload.ps1',
-        'src/apps/claude/state.ps1',
-        'src/apps/claude/detection.ps1',
         'src/apps/codex/detection.ps1',
         'src/apps/codex/inspection.ps1',
         'src/apps/codex/rtl-payload.ps1',
         'src/apps/codex/runtime-rtl.ps1',
-        'src/apps/claude/patching.ps1',
         'src/ui/menu.ps1'
     )
 
@@ -695,15 +687,6 @@ function Invoke-CodexRtlInjection {
     return $true
 }
 
-function Remove-CodexRtlLegacyWatcherTask {
-    $taskName = 'AI RTL Fix Codex RTL Watcher'
-    $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    if ($task) {
-        Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-    }
-}
-
 function Install-CodexRtlPatch {
     $inspection = Get-CodexInstallInspection
     if (-not $inspection.PackageFound -or -not $inspection.AppExe -or -not (Test-Path -LiteralPath $inspection.AppExe)) {
@@ -716,10 +699,8 @@ function Install-CodexRtlPatch {
 
     $existingState = Read-CodexRtlState
     $port = if ($existingState -and $existingState.Port) { [int]$existingState.Port } else { Get-CodexRtlAvailablePort }
-    Remove-CodexRtlLegacyWatcherTask
     Install-CodexRtlLauncherScript -PatchScriptPath $runtimePatchScript | Out-Null
     Remove-CodexRtlOwnedShortcut -ShortcutPath (Get-CodexRtlShortcutPath) | Out-Null
-    Remove-CodexRtlOwnedShortcut -ShortcutPath (Get-CodexRtlLegacyShortcutPath) | Out-Null
     $shortcutSpec = New-CodexLauncherShortcutSpec -Inspection $inspection
 
     $ownedArtifacts = @()
@@ -754,11 +735,10 @@ function Install-CodexRtlPatch {
         Write-Warn "Codex RTL Start Menu shortcut creation skipped for $(Get-CodexRtlShortcutPath): $($_.Exception.Message)"
     }
 
-    $legacyBackups = if ($existingState -and $existingState.ShortcutBackups) { @($existingState.ShortcutBackups) } else { @() }
     $state = New-CodexRtlState `
         -Inspection $inspection `
         -Port $port `
-        -ShortcutBackups $legacyBackups `
+        -ShortcutBackups @() `
         -OwnedArtifacts $ownedArtifacts
     Save-CodexRtlState -State $state
 
@@ -769,8 +749,6 @@ function Install-CodexRtlPatch {
 }
 
 function Restore-CodexRtlPatch {
-    Remove-CodexRtlLegacyWatcherTask
-
     $state = Read-CodexRtlState
     $patchedRunningProcess = $null
     $restoreAppExe = $null
@@ -800,10 +778,7 @@ function Restore-CodexRtlPatch {
 
     $ownedArtifacts = if ($state -and $state.OwnedArtifacts) { @($state.OwnedArtifacts) } else { @() }
     if ($ownedArtifacts.Count -eq 0) {
-        $ownedArtifacts = @(
-            (Get-CodexRtlShortcutPath),
-            (Get-CodexRtlLegacyShortcutPath)
-        )
+        $ownedArtifacts = @((Get-CodexRtlShortcutPath))
     }
     $removedOwnedShortcutCount = 0
     foreach ($ownedArtifact in $ownedArtifacts) {
@@ -826,9 +801,9 @@ function Restore-CodexRtlPatch {
 
     if ($patchedRunningProcess -and $restoreAppExe) {
         Start-CodexNormally -AppExe $restoreAppExe
-        Write-Host "Codex RTL runtime patch removed. Restored $($restored.Count) legacy shortcut backup(s), removed $removedOwnedShortcutCount owned Codex RTL shortcut(s), and restarted Codex in normal mode." -ForegroundColor Yellow
+        Write-Host "Codex RTL Fix runtime patch removed. Restored $($restored.Count) shortcut backup(s), removed $removedOwnedShortcutCount owned Codex RTL shortcut(s), and restarted Codex in normal mode." -ForegroundColor Yellow
     } else {
-        Write-Host "Codex RTL runtime patch removed. Restored $($restored.Count) legacy shortcut backup(s) and removed $removedOwnedShortcutCount owned Codex RTL shortcut(s). Restart Codex normally if it is still open to clear the already-injected runtime state." -ForegroundColor Yellow
+        Write-Host "Codex RTL Fix runtime patch removed. Restored $($restored.Count) shortcut backup(s) and removed $removedOwnedShortcutCount owned Codex RTL shortcut(s). Restart Codex normally if it is still open to clear the already-injected runtime state." -ForegroundColor Yellow
     }
 }
 

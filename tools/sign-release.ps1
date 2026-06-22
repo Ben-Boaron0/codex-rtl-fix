@@ -5,14 +5,14 @@
     Reads patch.ps1 as raw bytes, signs with RSA-PKCS1-SHA256, writes patch.ps1.sig
     (base64). Run this every time patch.ps1 changes, BEFORE 'git add'.
 
-    The private key is stored at $HOME\.ai-rtl-fix-signing.key by default. It
+    The private key is stored at $HOME\.codex-rtl-fix-signing.key by default. It
     NEVER appears in the repository. Back it up to an encrypted USB / password
     manager -- losing it means you can never ship a verified update again.
 .NOTES
     Maintainer-only tool. Not shipped to end users.
 #>
 param(
-    [string]$KeyPath = (Join-Path $HOME ".ai-rtl-fix-signing.key"),
+    [string]$KeyPath = (Join-Path $HOME ".codex-rtl-fix-signing.key"),
     [string]$Target  = $null
 )
 

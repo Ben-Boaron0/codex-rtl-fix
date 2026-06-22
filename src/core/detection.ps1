@@ -15,8 +15,7 @@
 
 function Get-DetectedApps {
     @(
-        Get-AppDetectionStatus -Name 'Claude Desktop' -InstallLocation (Find-ClaudeDir) -SupportStatus 'Supported'
-        Get-AppDetectionStatus -Name 'Codex Desktop' -InstallLocation (Find-CodexDir) -SupportStatus 'Planned'
+        Get-AppDetectionStatus -Name 'Codex Desktop' -InstallLocation (Find-CodexDir) -SupportStatus 'Supported'
     )
 }
 
