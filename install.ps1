@@ -84,7 +84,7 @@ if (-not $valid) {
     Write-Host "  * A maintainer pushed patch.ps1 without re-signing." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Cross-check the public-key fingerprint at:" -ForegroundColor Cyan
-    Write-Host "  https://github.com/Ben-Boaron0/codex-rtl-fix#verification" -ForegroundColor Cyan
+    Write-Host "  https://github.com/Ben-Boaron0/codex-rtl-fix#security-and-verification" -ForegroundColor Cyan
     return
 }
 

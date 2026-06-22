@@ -74,7 +74,8 @@ function Read-Host {
 Invoke-SelectedAppAction -ActionId 'Patch'
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Install-CodexRtlPatch' }).Count 'Codex patch should dispatch runtime RTL patch.'
 Assert-True (($script:Prompts | Where-Object { $_ -match '\(y/n\)' }).Count -eq 1) 'Codex patch confirmation should use lowercase y/n wording.'
-Assert-True (($script:Output | Where-Object { $_ -match 'automatically close and relaunch Codex if it is currently open' }).Count -eq 1) 'Codex patch warning should clearly state that open Codex sessions will be relaunched.'
+Assert-True (($script:Output | Where-Object { $_ -match 'Patch will close and relaunch Codex if it is open' }).Count -eq 1) 'Codex patch warning should clearly state that open Codex sessions will be relaunched.'
+Assert-True (($script:Output | Where-Object { $_ -match 'Launch Codex using the Codex RTL shortcuts after patching' }).Count -eq 1) 'Codex patch warning should explain how to use the patched launcher.'
 
 Reset-TestState
 function Read-Host {
@@ -84,6 +85,8 @@ function Read-Host {
 }
 Invoke-SelectedAppAction -ActionId 'Restore'
 Assert-Equal 1 @($script:Calls | Where-Object { $_ -eq 'Restore-CodexRtlPatch' }).Count 'Codex restore should dispatch runtime RTL restore.'
+Assert-True (($script:Output | Where-Object { $_ -match 'Restore removes the RTL launcher and shortcuts created by this tool' }).Count -eq 1) 'Codex restore warning should explain what restore removes.'
+Assert-True (($script:Output | Where-Object { $_ -match 'If Codex is still open, you may need to restart it afterward' }).Count -eq 1) 'Codex restore warning should explain that a restart may still be needed.'
 
 Reset-TestState
 function Read-Host {

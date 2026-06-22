@@ -30,14 +30,16 @@ $expectedRepoBase = 'https://raw.githubusercontent.com/Ben-Boaron0/codex-rtl-fix
 
 Assert-Match $install ([regex]::Escape($expectedRepoBase)) 'install.ps1 should download from Codex RTL Fix.'
 Assert-Match $patch ([regex]::Escape($expectedRepoBase + '/install.ps1')) 'patch.ps1 bootstrap fallback should use Codex RTL Fix install.ps1.'
-Assert-Match $readme ([regex]::Escape('irm https://raw.githubusercontent.com/Ben-Boaron0/codex-rtl-fix/main/install.ps1 | iex')) 'README should document the public Codex RTL Fix one-line installer.'
+Assert-Match $readme ([regex]::Escape('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Ben-Boaron0/codex-rtl-fix/main/install.ps1 | iex"')) 'README should document the Windows PowerShell one-line installer.'
 Assert-Match $readme 'Codex RTL' 'README should explain the Codex RTL shortcut behavior.'
+Assert-Match $readme 'powershell\.exe' 'README should consistently direct users to Windows PowerShell.'
 Assert-Match $install 'src/shared/logging\.ps1' 'install.ps1 should download the module tree needed by patch.ps1.'
 Assert-Match $install 'New-Item -ItemType Directory' 'install.ps1 should create module directories in the temp patch folder.'
 Assert-Match $patch 'CodexRtlFixModuleManifest' 'Signed patch.ps1 should pin hashes for downloaded modules.'
 Assert-Match $patch 'Get-FileHash' 'patch.ps1 should verify module hashes before loading modules.'
 Assert-Match $signRelease '\.codex-rtl-fix-signing\.key' 'sign-release.ps1 should default to the Codex RTL Fix private key.'
 Assert-Match $install 'Codex RTL Fix' 'install.ps1 should use Codex RTL Fix branding.'
+Assert-Match $install '#security-and-verification' 'install.ps1 should point signature failures at the current verification section.'
 Assert-Match $readme 'Public-key fingerprint' 'README should document the signing fingerprint.'
 
 foreach ($activeContent in @($install, $patch)) {

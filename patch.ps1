@@ -33,17 +33,17 @@ if ((-not $SkipMain) -and $RequiresElevation -and (-not $IsAdmin)) {
 }
 
 $script:CodexRtlFixModuleManifest = [ordered]@{
-    'src/shared/logging.ps1' = 'e4939b8b239036459e3b59429ae62590de53cbf51b9c22bec1a262938b1223a4'
+    'src/shared/logging.ps1' = '145acb1e07998a2944a01d22abd8e7438751b16db70f256d2b6146126e0e5985'
     'src/shared/prompting.ps1' = '1f21230a4fc91d69a41e370d52768b02e70ab32d9f35fb64824c16ac0cc23202'
     'src/shared/asar.ps1' = 'efff1c7b3a904d6d1dd6dc7b8a2a229b38a5c3ec69c32c8b35f1eb4143fb9a7b'
-    'src/codex/detection.ps1' = 'b3a2f5fdeca81dea966820fc4a0daa0842ca7cd9c52d98f8a553b1311985a19d'
-    'src/codex/rtl-payload.ps1' = 'f54f9ac96316b6fa4a53d831f249dbb54860c2918234cd23da32e08a0caaf712'
-    'src/runtime/state.ps1' = '490d408bafc1de898c7d950abc12961185b57633303289e2448936f61fcc0c22'
-    'src/runtime/files.ps1' = 'ed7edfae4c79d6e58becbef2eaa0fb3494aabe28fb69e280064087b0dfa7244e'
-    'src/runtime/shortcuts.ps1' = '39a7445dddf44b5946a023360fbcb08c3148dca23677b4309e4f3260aa5d0ffc'
-    'src/runtime/launch.ps1' = '82d9a2fa318a07d8aea6f716c68c18ccf18e178ce8b4f1572e2c9177ad86c199'
-    'src/runtime/patching.ps1' = '61de687559c7bdb176c993ccf7440680a11a4693d09e2bdb154f0c9ed0f8c001'
-    'src/ui/menu.ps1' = 'bedb04b7a7e1f9a45ba8001fe35b606a6354adf4917cc7d7cc8cfa27253c4d64'
+    'src/codex/detection.ps1' = '9a8aa5aa1ed0c0e582b862f89164400bfd25db132fd4d0800e3517316a81bd74'
+    'src/codex/rtl-payload.ps1' = 'f5236e71f33ecd3c04a0810ffc09da727f96e5f9f3468d0be8b5e5387fa99da0'
+    'src/runtime/state.ps1' = 'f90b0395867042b49adfed6c5aa4148df5556f720ed5c71f7c848d9cb89400f7'
+    'src/runtime/files.ps1' = '533eba5784f67e3d9c2deac160bae9e3f103ca96ccc177368dd4f1c48359d75e'
+    'src/runtime/shortcuts.ps1' = 'c80f64448d722dd5cb244c4debf22492ccfdbc2091b4bfad1ab58184c9ca95da'
+    'src/runtime/launch.ps1' = 'b6ba9f49a2dc041343984c18e4c36e1acf08259a8843b88c56abbc52472fe7ed'
+    'src/runtime/patching.ps1' = 'f0360a2bec460a9b5a88f67282f2cd14f5139b2d3660705ad4ba78bb1057b258'
+    'src/ui/menu.ps1' = '0f391ea9ae8a1dce913e3ad25b733c000527e595cfd3bc78961712a81ea2b31f'
 }
 
 foreach ($module in $script:CodexRtlFixModuleManifest.Keys) {

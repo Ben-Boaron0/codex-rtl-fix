@@ -269,7 +269,10 @@ try {
     Assert-True (Test-Path -LiteralPath $fallbackStartMenuShortcut) 'Patch should always create a user Start Menu Codex RTL shortcut even when no seedable Codex shortcut exists there.'
     Assert-True (Test-CodexRtlOwnedShortcut -ShortcutPath $fallbackStartMenuShortcut) 'Fallback user Start Menu Codex RTL shortcut should be Codex RTL Fix-owned.'
     Assert-True (@($script:SavedState.OwnedArtifacts) -contains $fallbackStartMenuShortcut) 'Saved state should track the fallback user Start Menu Codex RTL shortcut.'
+    Assert-True (($script:Output -join "`n") -match 'Codex RTL launcher installed\.') 'Patch wording should start with a clear success summary.'
     Assert-True (($script:Output -join "`n") -match 'Created or refreshed 1 Codex RTL shortcut') 'Patch wording should count the fallback Start Menu Codex RTL shortcut creation.'
+    Assert-True (($script:Output -join "`n") -match 'Skipped 0 candidate location') 'Patch wording should report skipped shortcut locations clearly.'
+    Assert-True (($script:Output -join "`n") -match 'Launch Codex using a Codex RTL shortcut') 'Patch wording should tell the user how to start the patched app.'
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
     $env:APPDATA = $oldAppData
@@ -327,7 +330,8 @@ try {
         )
         $script:StartedProcesses += [pscustomobject]@{
             FilePath = $FilePath
-            ArgumentList = @($ArgumentList)
+            ArgumentList = if ($PSBoundParameters.ContainsKey('ArgumentList')) { @($ArgumentList) } else { @() }
+            HasArgumentList = $PSBoundParameters.ContainsKey('ArgumentList')
             WorkingDirectory = $WorkingDirectory
         }
     }
@@ -377,8 +381,12 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Get-CodexRtlStatePath))) 'Restore patch should still remove the state file after one backup restore fails.'
     Assert-Equal 1 @($script:StartedProcesses).Count 'Restore should restart Codex normally when the patched RTL session is currently running.'
     Assert-Equal (Join-Path $tmpRestoreRoot 'Codex.exe') $script:StartedProcesses[0].FilePath 'Restore restart should use the normal Codex executable path.'
+    Assert-True (-not $script:StartedProcesses[0].HasArgumentList) 'Restore restart should omit normal-launch ArgumentList entirely.'
     Assert-Equal 0 @($script:StartedProcesses[0].ArgumentList).Count 'Restore restart should not reuse RTL debug arguments.'
-    Assert-True (($script:Output -join "`n") -match 'restarted Codex in normal mode') 'Restore wording should mention that Codex was restarted in normal mode after removing the RTL runtime patch.'
+    Assert-True (($script:Output -join "`n") -match 'Codex RTL runtime removed\.') 'Restore wording should start with a clear success summary.'
+    Assert-True (($script:Output -join "`n") -match 'Restored 1 shortcut backup') 'Restore wording should clearly count restored shortcut backups.'
+    Assert-True (($script:Output -join "`n") -match 'Removed 1 owned Codex RTL shortcut') 'Restore wording should clearly count removed owned shortcuts.'
+    Assert-True (($script:Output -join "`n") -match 'Restarted Codex in normal mode\.') 'Restore wording should mention the automatic normal restart on its own line.'
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
     if (Test-Path -LiteralPath $tmpRestoreRoot) {
@@ -425,7 +433,8 @@ try {
         )
         $script:StartedProcesses += [pscustomobject]@{
             FilePath = $FilePath
-            ArgumentList = @($ArgumentList)
+            ArgumentList = if ($PSBoundParameters.ContainsKey('ArgumentList')) { @($ArgumentList) } else { @() }
+            HasArgumentList = $PSBoundParameters.ContainsKey('ArgumentList')
             WorkingDirectory = $WorkingDirectory
         }
     }
@@ -446,7 +455,10 @@ try {
     Restore-CodexRtlPatch
 
     Assert-Equal 0 @($script:StartedProcesses).Count 'Restore should not restart Codex when the current session is not the RTL-patched one.'
-    Assert-True (($script:Output -join "`n") -match 'Restart Codex normally if it is still open') 'Restore wording should explain the manual normal restart when no patched RTL session was restarted automatically.'
+    Assert-True (($script:Output -join "`n") -match 'Codex RTL runtime removed\.') 'Restore wording should still start with a clear success summary when no restart happens.'
+    Assert-True (($script:Output -join "`n") -match 'Restored 0 shortcut backup') 'Restore wording should report zero restored backups when none existed.'
+    Assert-True (($script:Output -join "`n") -match 'Removed 1 owned Codex RTL shortcut') 'Restore wording should still report removed owned shortcuts when no restart happens.'
+    Assert-True (($script:Output -join "`n") -match 'Restart Codex normally if it is still open\.') 'Restore wording should explain the manual normal restart when no patched RTL session was restarted automatically.'
 } finally {
     $env:LOCALAPPDATA = $oldLocalAppData
     if (Test-Path -LiteralPath $tmpRestoreNoRestartRoot) {
@@ -457,6 +469,29 @@ try {
 $args = New-CodexRtlLaunchArguments -Port 18317
 Assert-True ($args -contains '--remote-debugging-port=18317') 'Launch args should enable CDP on the chosen port.'
 Assert-True ($args -contains '--remote-debugging-address=127.0.0.1') 'Launch args should bind CDP to loopback only.'
+
+$script:DirectStartProcessCalls = @()
+function Start-Process {
+    param(
+        [string]$FilePath,
+        [object[]]$ArgumentList,
+        [string]$WorkingDirectory
+    )
+    if ($PSBoundParameters.ContainsKey('ArgumentList') -and @($ArgumentList).Count -eq 0) {
+        throw 'ArgumentList should be omitted when no normal-launch arguments are needed.'
+    }
+    $script:DirectStartProcessCalls += [pscustomobject]@{
+        FilePath = $FilePath
+        ArgumentList = if ($PSBoundParameters.ContainsKey('ArgumentList')) { @($ArgumentList) } else { @() }
+        HasArgumentList = $PSBoundParameters.ContainsKey('ArgumentList')
+        WorkingDirectory = $WorkingDirectory
+    }
+}
+Start-CodexNormally -AppExe 'C:\Program Files\WindowsApps\OpenAI.Codex_fake\app\Codex.exe'
+Assert-Equal 1 @($script:DirectStartProcessCalls).Count 'Normal launch should invoke Start-Process once.'
+Assert-True (-not $script:DirectStartProcessCalls[0].HasArgumentList) 'Normal launch should omit ArgumentList entirely.'
+Assert-Equal 'C:\Program Files\WindowsApps\OpenAI.Codex_fake\app\Codex.exe' $script:DirectStartProcessCalls[0].FilePath 'Normal launch should use the Codex executable path.'
+Assert-Equal 'C:\Program Files\WindowsApps\OpenAI.Codex_fake\app' $script:DirectStartProcessCalls[0].WorkingDirectory 'Normal launch should use the executable parent directory as the working directory.'
 
 $pageTarget = [pscustomobject]@{
     type = 'page'
@@ -495,9 +530,115 @@ Assert-True ($payload.Contains('unicodeBidi')) 'Payload should use bidi-safe ren
 Assert-True ($payload.Contains('data-codex-rtl-fix')) 'Payload should mark only tool-owned changes.'
 Assert-True ($payload.Contains('removeAttribute(''dir'')') -or $payload.Contains('removeAttribute("dir")')) 'Payload should clean stale broad dir attributes.'
 Assert-True (-not ($payload -match "querySelectorAll\('\[data-thread-find-target=.*setAttribute\('dir', 'rtl'")) 'Payload should not force the conversation root to RTL.'
-Assert-True ($payload.Contains('[contenteditable="true"]')) 'Payload should target quoted contenteditable composers.'
-Assert-True ($payload.Contains('[contenteditable=true]')) 'Payload should target unquoted contenteditable composers.'
+Assert-True (-not ($payload.Contains('numberCount > 0 && rtlCount > 0'))) 'Payload should not classify RTL text as mixed-LTR just because it contains numbers.'
+Assert-True ($payload.Contains('function getMeaningfulText')) 'Payload should strip diagnostic prefixes before classifying block direction.'
+Assert-True ($payload.Contains('function applyBlockDirection')) 'Payload should apply block direction through one helper.'
+Assert-True ($payload.Contains('function processInlineTechnicalIslands')) 'Payload should isolate inline technical fragments explicitly.'
+Assert-True ($payload.Contains('function processLists')) 'Payload should process list structure explicitly.'
+Assert-True ($payload.Contains('function processBlockquotes')) 'Payload should process blockquote structure explicitly.'
+Assert-True (-not ($payload.Contains('processTables(bubble)'))) 'Payload should not patch table cells inside user bubbles.'
+Assert-True (-not ($payload.Contains('processTables(root)'))) 'Payload should not patch table cells inside conversation roots.'
+Assert-True ($payload.Contains('[data-thread-find-target="conversation"]')) 'Payload should keep the existing conversation-root targeting.'
+Assert-True ($payload.Contains('span[data-thread-title="true"]')) 'Payload should target verified sidebar thread title spans.'
+Assert-True ($payload.Contains('data-app-action-sidebar-project-row')) 'Payload should target verified sidebar project rows.'
+Assert-True ($payload.Contains('data-app-action-sidebar-project-label')) 'Payload should target verified sidebar project labels.'
+Assert-True ($payload.Contains('app-shell-header-context-menu-surface')) 'Payload should target the app header title surface.'
+Assert-True ($payload.Contains('[data-user-message-bubble="true"]')) 'Payload should target verified user message bubbles directly.'
+Assert-True ($payload.Contains('div.ProseMirror')) 'Payload should target ProseMirror composers and edit boxes.'
+Assert-True ($payload.Contains('textarea')) 'Payload should target standard textareas for auto direction.'
+Assert-True ($payload.Contains('[contenteditable="true"]')) 'Payload should keep quoted contenteditable composer support.'
+Assert-True ($payload.Contains('[contenteditable=true]')) 'Payload should keep unquoted contenteditable composer support.'
+Assert-True ($payload.Contains('ol, ul')) 'Payload should handle ordered and unordered list containers explicitly.'
+Assert-True ($payload.Contains('input[type="checkbox"]')) 'Payload should account for task-list checkbox markers.'
+Assert-True ($payload.Contains('data-codex-rtl-fix-style')) 'Payload should inject a dedicated stylesheet for technical inline fragments.'
+Assert-True ($payload.Contains('unicode-bidi: isolate')) 'Payload stylesheet should isolate inline technical fragments safely.'
+Assert-True (-not ($payload.Contains('unicode-bidi: isolate-override !important'))) 'Payload should avoid isolate-override because it flips Hebrew in mixed technical surfaces.'
+Assert-True ($payload.Contains('border-left: 0 !important')) 'RTL blockquote styling should explicitly remove Codex left quote border.'
+Assert-True ($payload.Contains('border-right: 0.25rem solid currentColor !important')) 'RTL blockquote styling should explicitly add the quote border on the right.'
+Assert-True ($payload.Contains('padding-left: 0 !important')) 'RTL blockquote styling should explicitly clear left padding.'
+Assert-True ($payload.Contains('padding-right: 1rem !important')) 'RTL blockquote styling should explicitly add right padding.'
+foreach ($tableSelector in @('table', 'thead', 'tbody', 'tr', 'th', 'td')) {
+    Assert-True ($payload.Contains("'$tableSelector'") -or $payload.Contains('"$tableSelector"')) "Payload skip selector should shield '$tableSelector' elements."
+}
+$textSelectorsOnly = ($payload -split 'const SKIP_SELECTOR')[0]
+Assert-True (-not $textSelectorsOnly.Contains("'td'")) 'Payload text block targeting should not include table cells.'
+Assert-True (-not $textSelectorsOnly.Contains("'th'")) 'Payload text block targeting should not include table headers.'
 Assert-True ($payload.Contains('MutationObserver')) 'Payload should reapply after React DOM changes.'
+
+$nodeCommand = Get-Command -Name node -ErrorAction SilentlyContinue
+if ($nodeCommand) {
+    $payloadTempPath = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-rtl-payload-{0}.js" -f ([guid]::NewGuid().ToString('N')))
+    $runnerTempPath = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-rtl-runner-{0}.js" -f ([guid]::NewGuid().ToString('N')))
+    try {
+        Set-Content -LiteralPath $payloadTempPath -Value $payload -Encoding UTF8
+        Set-Content -LiteralPath $runnerTempPath -Encoding UTF8 -Value @'
+const fs = require('fs');
+const vm = require('vm');
+const payload = fs.readFileSync(process.argv[2], 'utf8');
+
+const context = {
+  console,
+  window: { setTimeout: (fn) => fn() },
+  document: {
+    readyState: 'loading',
+    addEventListener: () => {},
+    querySelectorAll: () => [],
+    head: {
+      querySelector: () => null,
+      appendChild: () => {}
+    },
+    createElement: () => ({
+      setAttribute: () => {},
+      style: {},
+      textContent: ''
+    })
+  },
+  MutationObserver: function MutationObserver() {
+    return {
+      observe: () => {},
+      disconnect: () => {}
+    };
+  }
+};
+
+vm.runInNewContext(payload, context);
+const classify = context.window.__CODEX_RTL_FIX_CODEX.classifyDirection;
+const cases = [
+  ['rtl', '\u05e2\u05d1\u05e8\u05d9\u05ea \u05e2\u05dd \u05de\u05e1\u05e4\u05e8 \u05e4\u05e0\u05d9\u05de\u05d9 123 \u05d1\u05d0\u05de\u05e6\u05e2 \u05d4\u05de\u05e9\u05e4\u05d8'],
+  ['rtl', 'A03. Hebrew then English: \u05e9\u05dc\u05d5\u05dd LoginActivity update README'],
+  ['rtl', '50 \u05d5\u05e8\u05d9\u05d0\u05e6\u05d9\u05d5\u05ea \u05e7\u05e6\u05e8\u05d5\u05ea \u05d1\u05de\u05d9\u05d5\u05d7\u05d3'],
+  ['rtl', '\u05db\u05d5\u05ea\u05e8\u05ea \u05e2\u05dd inline code \u05d5-English'],
+  ['rtl', 'H05. Compare dir="rtl" \u05de\u05d5\u05dc dir="auto" \u05d1\u05ea\u05d5\u05da \u05de\u05e9\u05e4\u05d8 \u05e2\u05d1\u05e8\u05d9.'],
+  ['ltr', 'Please review \u05e9\u05dc\u05d5\u05dd world'],
+  ['ltr', 'English only ID-1234']
+];
+
+for (const [expected, input] of cases) {
+  const actual = classify(input);
+  if (actual !== expected) {
+    throw new Error(`${input}: expected ${expected}, got ${actual}`);
+  }
+}
+'@
+        $oldErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $nodeOutput = & $nodeCommand.Path $runnerTempPath $payloadTempPath 2>&1 | ForEach-Object { "$_" }
+            $nodeExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $oldErrorActionPreference
+        }
+        if ($nodeExitCode -ne 0) {
+            throw "Payload classifier behavior check failed:`n$($nodeOutput | Out-String)"
+        }
+    } finally {
+        foreach ($tempPath in @($payloadTempPath, $runnerTempPath)) {
+            if (Test-Path -LiteralPath $tempPath) {
+                Remove-Item -LiteralPath $tempPath -Force
+            }
+        }
+    }
+}
 
 $cdpBody = (Get-Command -Name Invoke-CodexRtlInjectionForTarget -CommandType Function).ScriptBlock.ToString()
 Assert-True ($cdpBody.Contains('Page.addScriptToEvaluateOnNewDocument')) 'Injection should install the payload for future documents.'

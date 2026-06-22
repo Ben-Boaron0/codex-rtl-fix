@@ -1,0 +1,20 @@
+# Private signing key — NEVER commit
+*.key
+*.pfx
+*.p12
+*.pem
+
+# Editor / IDE
+.vs/
+*.user
+.vscode/
+
+# OS noise
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+ehthumbs.db
+
+# Pester / test output
+TestResults/
+*.xml

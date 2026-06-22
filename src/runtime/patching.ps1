@@ -56,7 +56,10 @@ function Install-CodexRtlPatch {
     Start-CodexForRtl -Inspection $installInfo -Port $port -AllowRestart | Out-Null
     Invoke-CodexRtlInjection -Port $port | Out-Null
 
-    Write-Host "Codex RTL launcher installed. Created or refreshed $createdOrRefreshedCount Codex RTL shortcut(s), skipped $($skippedCodexShortcuts.Count) candidate location(s). Use Codex RTL shortcuts to launch Codex with RTL support." -ForegroundColor Green
+    Write-Host "Codex RTL launcher installed." -ForegroundColor Green
+    Write-Host "Created or refreshed $createdOrRefreshedCount Codex RTL shortcut(s)." -ForegroundColor Green
+    Write-Host "Skipped $($skippedCodexShortcuts.Count) candidate location(s)." -ForegroundColor Green
+    Write-Host "Launch Codex using a Codex RTL shortcut." -ForegroundColor Green
 }
 
 function Restore-CodexRtlPatch {
@@ -112,9 +115,15 @@ function Restore-CodexRtlPatch {
 
     if ($patchedRunningProcess -and $restoreAppExe) {
         Start-CodexNormally -AppExe $restoreAppExe
-        Write-Host "Codex RTL Fix runtime patch removed. Restored $($restored.Count) shortcut backup(s), removed $removedOwnedShortcutCount owned Codex RTL shortcut(s), and restarted Codex in normal mode." -ForegroundColor Yellow
+        Write-Host "Codex RTL runtime removed." -ForegroundColor Yellow
+        Write-Host "Restored $($restored.Count) shortcut backup(s)." -ForegroundColor Yellow
+        Write-Host "Removed $removedOwnedShortcutCount owned Codex RTL shortcut(s)." -ForegroundColor Yellow
+        Write-Host "Restarted Codex in normal mode." -ForegroundColor Yellow
     } else {
-        Write-Host "Codex RTL Fix runtime patch removed. Restored $($restored.Count) shortcut backup(s) and removed $removedOwnedShortcutCount owned Codex RTL shortcut(s). Restart Codex normally if it is still open to clear the already-injected runtime state." -ForegroundColor Yellow
+        Write-Host "Codex RTL runtime removed." -ForegroundColor Yellow
+        Write-Host "Restored $($restored.Count) shortcut backup(s)." -ForegroundColor Yellow
+        Write-Host "Removed $removedOwnedShortcutCount owned Codex RTL shortcut(s)." -ForegroundColor Yellow
+        Write-Host "Restart Codex normally if it is still open." -ForegroundColor Yellow
     }
 }
 

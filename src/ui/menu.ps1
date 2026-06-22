@@ -34,7 +34,9 @@ function Invoke-SelectedAppAction {
             [Parameter(Mandatory)][scriptblock]$Action
         )
 
-        Write-Host "`nWARNING: $Warning" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Warning:" -ForegroundColor Yellow
+        Write-Host $Warning -ForegroundColor Yellow
         if (-not (Read-YesNoPrompt -Prompt "Do you want to continue? (Y/n)")) {
             Write-Host "Operation cancelled."
             return
@@ -51,12 +53,12 @@ function Invoke-SelectedAppAction {
     switch ($ActionId) {
         'Patch' {
             & $invokeWithConfirmation `
-                -Warning 'This will automatically close and relaunch Codex if it is currently open so it can start with local RTL injection support.' `
+                -Warning "Patch will close and relaunch Codex if it is open.`nLaunch Codex using the Codex RTL shortcuts after patching." `
                 -Action { Install-CodexRtlPatch }
         }
         'Restore' {
             & $invokeWithConfirmation `
-                -Warning 'This will remove the Codex runtime RTL launcher and may require a Codex restart to fully clear injected state.' `
+                -Warning "Restore removes the RTL launcher and shortcuts created by this tool.`nIf Codex is still open, you may need to restart it afterward." `
                 -Action { Restore-CodexRtlPatch }
         }
         default {

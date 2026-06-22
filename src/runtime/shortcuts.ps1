@@ -2,10 +2,6 @@ function Get-CodexRtlShortcutPath {
     Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Codex RTL.lnk'
 }
 
-function Get-CodexShortcutBackupRoot {
-    Join-Path (Get-CodexRtlStateRoot) 'backups\shortcuts'
-}
-
 function Get-CodexShortcutSearchRoots {
     @(
         (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
@@ -65,14 +61,6 @@ function Get-CodexShortcutInventory {
     $rows
 }
 
-function Test-CodexShortcutReplaceable {
-    param([Parameter(Mandatory)]$Shortcut)
-
-    if (-not $Shortcut.Exists -or -not $Shortcut.IsLink -or -not $Shortcut.IsWritable) { return $false }
-    $haystack = @($Shortcut.Name, $Shortcut.TargetPath, $Shortcut.Arguments) -join "`n"
-    return [bool]($haystack -match 'OpenAI\.Codex|\\Codex\.exe|(^|[^A-Za-z])Codex([^A-Za-z]|$)')
-}
-
 function Test-CodexShortcutCandidate {
     param([Parameter(Mandatory)]$Shortcut)
 
@@ -93,48 +81,6 @@ function Get-CodexSiblingRtlShortcutPath {
 
     $shortcutDir = Split-Path -Parent $ShortcutPath
     Join-Path $shortcutDir 'Codex RTL.lnk'
-}
-
-function Get-StableShortcutBackupPath {
-    param([Parameter(Mandatory)][string]$ShortcutPath)
-
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($ShortcutPath.ToLowerInvariant())
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $hash = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
-    } finally {
-        $sha.Dispose()
-    }
-    Join-Path (Get-CodexShortcutBackupRoot) "$hash.lnk"
-}
-
-function New-CodexShortcutBackupRecord {
-    param(
-        [Parameter(Mandatory)]$Shortcut,
-        [Parameter(Mandatory)][string]$BackupPath,
-        [string]$Kind = 'Shortcut'
-    )
-
-    [pscustomobject]@{
-        OriginalPath = $Shortcut.Path
-        BackupPath = $BackupPath
-        OriginalTargetPath = $Shortcut.TargetPath
-        OriginalArguments = $Shortcut.Arguments
-        Kind = $Kind
-        ReplacedAt = [DateTimeOffset]::Now.ToString('o')
-    }
-}
-
-function Backup-CodexShortcut {
-    param([Parameter(Mandatory)]$Shortcut)
-
-    $backupPath = Get-StableShortcutBackupPath -ShortcutPath $Shortcut.Path
-    $backupDir = Split-Path -Parent $backupPath
-    if (-not (Test-Path -LiteralPath $backupDir)) {
-        New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
-    }
-    Copy-Item -LiteralPath $Shortcut.Path -Destination $backupPath -Force
-    New-CodexShortcutBackupRecord -Shortcut $Shortcut -BackupPath $backupPath -Kind 'Shortcut'
 }
 
 function Get-CodexIconLocation {
@@ -202,17 +148,6 @@ function Remove-CodexRtlOwnedShortcut {
         return $true
     }
     return $false
-}
-
-function Replace-CodexShortcut {
-    param(
-        [Parameter(Mandatory)]$Shortcut,
-        [Parameter(Mandatory)]$Spec
-    )
-
-    $backup = Backup-CodexShortcut -Shortcut $Shortcut
-    New-CodexLauncherShortcut -ShortcutPath $Shortcut.Path -Spec $Spec
-    return $backup
 }
 
 function New-CodexParallelRtlShortcut {

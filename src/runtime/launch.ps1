@@ -76,7 +76,6 @@ function Start-CodexNormally {
 
     Start-Process `
         -FilePath $AppExe `
-        -ArgumentList @() `
         -WorkingDirectory (Split-Path -Parent $AppExe) | Out-Null
 }
 
